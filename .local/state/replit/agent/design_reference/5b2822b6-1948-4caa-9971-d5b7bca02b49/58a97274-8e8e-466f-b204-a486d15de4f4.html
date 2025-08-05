@@ -1,0 +1,691 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temple Donation Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'temple-primary': '#FF6B35',
+                    'temple-secondary': '#F7931E',
+                    'temple-accent': '#FFE5D9'
+                },
+                fontFamily: {
+                    'inter': ['Inter', 'sans-serif']
+                }
+            }
+        }
+    };
+    </script>
+</head>
+<body class="bg-gray-50 font-inter">
+    <!-- @COMPONENT: Header [Navigation and branding] -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-place-of-worship text-temple-primary text-2xl"></i>
+                    <h1 class="text-xl font-semibold text-gray-900">Temple Donation System</h1>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <button class="tab-btn active px-4 py-2 text-sm font-medium text-temple-primary border-b-2 border-temple-primary" data-tab="donation-form">
+                        New Donation
+                    </button>
+                    <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700" data-tab="lookup">
+                        Donor Lookup
+                    </button>
+                    <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700" data-tab="dashboard">
+                        Dashboard
+                    </button>
+                    <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700" data-tab="admin">
+                        Admin Panel
+                    </button>
+                </nav>
+                <div class="md:hidden">
+                    <button class="mobile-menu-btn p-2 text-gray-600">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile menu -->
+        <div class="mobile-menu hidden md:hidden bg-white border-t">
+            <div class="px-4 py-3 space-y-2">
+                <button class="block w-full text-left px-3 py-2 text-sm text-temple-primary bg-temple-accent rounded" data-tab="donation-form">New Donation</button>
+                <button class="block w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded" data-tab="lookup">Donor Lookup</button>
+                <button class="block w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded" data-tab="dashboard">Dashboard</button>
+                <button class="block w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded" data-tab="admin">Admin Panel</button>
+            </div>
+        </div>
+    </header>
+    <!-- @END_COMPONENT: Header -->
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- @COMPONENT: DonationForm [New donation entry form] -->
+        <div id="donation-form" class="tab-content">
+            <div class="max-w-4xl mx-auto">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-temple-primary to-temple-secondary px-6 py-4">
+                        <h2 class="text-xl font-semibold text-white">New Donation Entry</h2>
+                        <p class="text-white/90 text-sm mt-1">Enter donor information and donation details</p>
+                    </div>
+                    
+                    <form class="p-6 space-y-6" data-implementation="Should integrate with Google Forms API">
+                        <!-- @STATE: formData:object = {} -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Receipt Number</label>
+                                <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent bg-gray-50" 
+                                       value="RCP-2024-001" readonly data-implementation="Auto-generate receipt number">
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Phone Number *</label>
+                                <input type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" 
+                                       placeholder="Enter phone number" data-bind="donor.phone" data-event="blur:checkExistingDonor">
+                            </div>
+                        </div>
+
+                        <!-- Donor History Display -->
+                        <div id="donor-history" class="hidden bg-temple-accent border border-temple-primary/20 rounded-lg p-4" data-implementation="Show when existing donor found">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium text-gray-900" data-bind="existingDonor.name">Rajesh Kumar</h4>
+                                    <p class="text-sm text-gray-600">Previous donations: <span data-bind="existingDonor.totalDonations" class="font-medium">₹25,000</span></p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-600">Last donation: <span data-bind="existingDonor.lastDonationDate">15 Dec 2023</span></p>
+                                    <p class="text-sm text-gray-600">Total visits: <span data-bind="existingDonor.visitCount">8</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Donor Name *</label>
+                                <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" 
+                                       placeholder="Enter full name" data-bind="donor.name">
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Community</label>
+                                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" data-bind="donor.community">
+                                    <option value="">Select Community</option>
+                                    <option value="local">Local Devotees</option>
+                                    <option value="regional">Regional Supporters</option>
+                                    <option value="international">International Donors</option>
+                                    <option value="business">Business Community</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Location</label>
+                            <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" 
+                                   placeholder="City, State" data-bind="donor.location">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Donation Amount *</label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2 text-gray-500">₹</span>
+                                    <input type="number" class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" 
+                                           placeholder="0.00" data-bind="donation.amount">
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Payment Mode *</label>
+                                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary focus:border-transparent" data-bind="donation.paymentMode">
+                                    <option value="">Select Payment Mode</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Debit/Credit Card</option>
+                                    <option value="upi">UPI</option>
+                                    <option value="bank-transfer">Bank Transfer</option>
+                                    <option value="cheque">Cheque</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <label class="block text-sm font-medium text-gray-700">Inscription Required</label>
+                            <div class="flex space-x-6">
+                                <label class="flex items-center">
+                                    <input type="radio" name="inscription" value="yes" class="text-temple-primary focus:ring-temple-primary">
+                                    <span class="ml-2 text-sm text-gray-700">Yes</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="inscription" value="no" class="text-temple-primary focus:ring-temple-primary" checked>
+                                    <span class="ml-2 text-sm text-gray-700">No</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex space-x-4 pt-4 border-t border-gray-200">
+                            <button type="submit" class="flex-1 bg-temple-primary text-white py-2 px-4 rounded-md hover:bg-temple-primary/90 focus:outline-none focus:ring-2 focus:ring-temple-primary focus:ring-offset-2 font-medium transition-colors" 
+                                    data-event="click:handleSubmit">
+                                <i class="fas fa-plus mr-2"></i>
+                                Add Donation
+                            </button>
+                            <button type="button" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
+                                Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: DonationForm -->
+
+        <!-- @COMPONENT: DonorLookup [Search and view donor history] -->
+        <div id="lookup" class="tab-content hidden">
+            <div class="max-w-6xl mx-auto space-y-6">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6">Donor Lookup</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Search by Phone</label>
+                            <input type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary" 
+                                   placeholder="Enter phone number" data-event="input:searchDonor">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Search by Name</label>
+                            <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary" 
+                                   placeholder="Enter name" data-event="input:searchDonor">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Filter by Community</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                                <option value="">All Communities</option>
+                                <option value="local">Local Devotees</option>
+                                <option value="regional">Regional Supporters</option>
+                                <option value="international">International Donors</option>
+                                <option value="business">Business Community</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div class="space-y-4" data-implementation="Display search results">
+                        <!-- @MAP: searchResults.map(donor => ( -->
+                        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" data-event="click:showDonorDetails">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-medium text-gray-900" data-bind="donor.name">Rajesh Kumar</h3>
+                                    <p class="text-sm text-gray-600" data-bind="donor.phone">+91 98765 43210</p>
+                                    <p class="text-sm text-gray-600" data-bind="donor.location">Mumbai, Maharashtra</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-medium text-temple-primary" data-bind="donor.totalAmount">₹25,000</p>
+                                    <p class="text-sm text-gray-600" data-bind="donor.donationCount">8 donations</p>
+                                    <p class="text-sm text-gray-600" data-bind="donor.lastDonation">Last: 15 Dec 2023</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- @END_MAP )) -->
+                    </div>
+                </div>
+
+                <!-- Donor Details Modal -->
+                <div id="donor-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" data-implementation="Modal overlay component">
+                    <div class="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-900">Donor Details</h3>
+                            <button class="text-gray-400 hover:text-gray-600" data-event="click:closeModal">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="space-y-4">
+                                    <div>
+                                        <h4 class="font-medium text-gray-900" data-bind="selectedDonor.name">Rajesh Kumar</h4>
+                                        <p class="text-gray-600" data-bind="selectedDonor.phone">+91 98765 43210</p>
+                                        <p class="text-gray-600" data-bind="selectedDonor.location">Mumbai, Maharashtra</p>
+                                        <p class="text-gray-600">Community: <span data-bind="selectedDonor.community">Local Devotees</span></p>
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="bg-temple-accent p-4 rounded-lg text-center">
+                                            <p class="text-2xl font-bold text-temple-primary" data-bind="selectedDonor.totalAmount">₹25,000</p>
+                                            <p class="text-sm text-gray-600">Total Donated</p>
+                                        </div>
+                                        <div class="bg-gray-100 p-4 rounded-lg text-center">
+                                            <p class="text-2xl font-bold text-gray-900" data-bind="selectedDonor.donationCount">8</p>
+                                            <p class="text-sm text-gray-600">Total Visits</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h4 class="font-medium text-gray-900 mb-4">Donation History</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left">Date</th>
+                                            <th class="px-4 py-2 text-left">Receipt No.</th>
+                                            <th class="px-4 py-2 text-left">Amount</th>
+                                            <th class="px-4 py-2 text-left">Payment Mode</th>
+                                            <th class="px-4 py-2 text-left">Inscription</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        <!-- @MAP: selectedDonor.donations.map(donation => ( -->
+                                        <tr data-mock="true">
+                                            <td class="px-4 py-2" data-bind="donation.date">15 Dec 2023</td>
+                                            <td class="px-4 py-2" data-bind="donation.receipt">RCP-2023-245</td>
+                                            <td class="px-4 py-2 font-medium text-temple-primary" data-bind="donation.amount">₹5,000</td>
+                                            <td class="px-4 py-2" data-bind="donation.paymentMode">UPI</td>
+                                            <td class="px-4 py-2" data-bind="donation.inscription">No</td>
+                                        </tr>
+                                        <!-- @END_MAP )) -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: DonorLookup -->
+
+        <!-- @COMPONENT: Dashboard [Statistics and overview] -->
+        <div id="dashboard" class="tab-content hidden">
+            <div class="space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-semibold text-gray-900">Collection Dashboard</h2>
+                    <div class="flex space-x-2">
+                        <select class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                            <option>This Month</option>
+                            <option>Last Month</option>
+                            <option>This Year</option>
+                            <option>Custom Range</option>
+                        </select>
+                        <button class="px-4 py-2 bg-temple-primary text-white rounded-md text-sm hover:bg-temple-primary/90 transition-colors">
+                            <i class="fas fa-download mr-2"></i>Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Total Collection</p>
+                                <p class="text-2xl font-bold text-temple-primary" data-bind="stats.totalCollection">₹2,45,000</p>
+                            </div>
+                            <div class="bg-temple-accent p-3 rounded-full">
+                                <i class="fas fa-coins text-temple-primary text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-sm text-green-600 mt-2">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            12% from last month
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Total Donors</p>
+                                <p class="text-2xl font-bold text-gray-900" data-bind="stats.totalDonors">1,234</p>
+                            </div>
+                            <div class="bg-blue-100 p-3 rounded-full">
+                                <i class="fas fa-users text-blue-600 text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-sm text-green-600 mt-2">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            8% from last month
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">This Month</p>
+                                <p class="text-2xl font-bold text-gray-900" data-bind="stats.thisMonth">₹45,000</p>
+                            </div>
+                            <div class="bg-green-100 p-3 rounded-full">
+                                <i class="fas fa-calendar text-green-600 text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2">156 donations</p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600">Average Donation</p>
+                                <p class="text-2xl font-bold text-gray-900" data-bind="stats.avgDonation">₹1,985</p>
+                            </div>
+                            <div class="bg-purple-100 p-3 rounded-full">
+                                <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                            </div>
+                        </div>
+                        <p class="text-sm text-green-600 mt-2">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            5% from last month
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Charts and Recent Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Mode Distribution</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">UPI</span>
+                                <span class="text-sm font-medium">45%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-temple-primary h-2 rounded-full" style="width: 45%"></div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Cash</span>
+                                <span class="text-sm font-medium">30%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-temple-secondary h-2 rounded-full" style="width: 30%"></div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Card</span>
+                                <span class="text-sm font-medium">20%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full" style="width: 20%"></div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Bank Transfer</span>
+                                <span class="text-sm font-medium">5%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 5%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Donations</h3>
+                        <div class="space-y-4">
+                            <!-- @MAP: recentDonations.map(donation => ( -->
+                            <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0" data-mock="true">
+                                <div>
+                                    <p class="font-medium text-gray-900" data-bind="donation.name">Priya Sharma</p>
+                                    <p class="text-sm text-gray-600" data-bind="donation.date">Today, 2:30 PM</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-medium text-temple-primary" data-bind="donation.amount">₹5,000</p>
+                                    <p class="text-sm text-gray-600" data-bind="donation.mode">UPI</p>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: Dashboard -->
+
+        <!-- @COMPONENT: AdminPanel [Full donation records management] -->
+        <div id="admin" class="tab-content hidden">
+            <div class="space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-semibold text-gray-900">Admin Panel</h2>
+                    <div class="flex space-x-2">
+                        <button class="px-4 py-2 bg-temple-primary text-white rounded-md text-sm hover:bg-temple-primary/90 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Add Manual Entry
+                        </button>
+                        <button class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-download mr-2"></i>Export All
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                                <option>All Time</option>
+                                <option>Today</option>
+                                <option>This Week</option>
+                                <option>This Month</option>
+                                <option>Custom Range</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Community</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                                <option>All Communities</option>
+                                <option>Local Devotees</option>
+                                <option>Regional Supporters</option>
+                                <option>International Donors</option>
+                                <option>Business Community</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                                <option>All Modes</option>
+                                <option>Cash</option>
+                                <option>UPI</option>
+                                <option>Card</option>
+                                <option>Bank Transfer</option>
+                                <option>Cheque</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Amount Range</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-temple-primary">
+                                <option>All Amounts</option>
+                                <option>₹0 - ₹1,000</option>
+                                <option>₹1,001 - ₹5,000</option>
+                                <option>₹5,001 - ₹10,000</option>
+                                <option>₹10,000+</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donations Table -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-900">All Donations</h3>
+                            <p class="text-sm text-gray-600">Showing 1-10 of 1,234 records</p>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt No</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Community</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Mode</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inscription</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <!-- @MAP: donations.map((donation, index) => ( -->
+                                <tr class="hover:bg-gray-50" data-mock="true">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="donation.serialNo">1</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-temple-primary" data-bind="donation.receiptNo">RCP-2024-001</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="donation.name">Rajesh Kumar</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600" data-bind="donation.community">Local Devotees</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600" data-bind="donation.location">Mumbai, MH</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600" data-bind="donation.phone">+91 98765 43210</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-temple-primary" data-bind="donation.amount">₹5,000</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600" data-bind="donation.paymentMode">UPI</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600" data-bind="donation.inscription">No</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button class="text-temple-primary hover:text-temple-primary/80 mr-3" data-event="click:editDonation">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-red-600 hover:text-red-800" data-event="click:deleteDonation">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <!-- @END_MAP )) -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div class="bg-white px-6 py-3 border-t border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-700">
+                                Showing <span class="font-medium">1</span> to <span class="font-medium">10</span> of <span class="font-medium">1,234</span> results
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="px-3 py-1 border border-gray-300 text-gray-500 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50" disabled>
+                                    Previous
+                                </button>
+                                <button class="px-3 py-1 bg-temple-primary text-white rounded-md text-sm">1</button>
+                                <button class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">2</button>
+                                <button class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">3</button>
+                                <button class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: AdminPanel -->
+
+    </main>
+
+    <script>
+    (function() {
+        // Tab switching functionality
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const mobileMenu = document.querySelector('.mobile-menu');
+
+        function switchTab(targetTab) {
+            // Hide all tab contents
+            tabContents.forEach(content => content.classList.add('hidden'));
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'text-temple-primary', 'border-temple-primary', 'bg-temple-accent');
+                btn.classList.add('text-gray-500');
+            });
+            
+            // Show target tab content
+            const targetContent = document.getElementById(targetTab);
+            if (targetContent) {
+                targetContent.classList.remove('hidden');
+            }
+            
+            // Add active class to clicked button
+            const activeButtons = document.querySelectorAll(`[data-tab="${targetTab}"]`);
+            activeButtons.forEach(btn => {
+                btn.classList.remove('text-gray-500');
+                btn.classList.add('active', 'text-temple-primary');
+                if (btn.classList.contains('tab-btn') && !btn.classList.contains('block')) {
+                    btn.classList.add('border-temple-primary');
+                } else {
+                    btn.classList.add('bg-temple-accent');
+                }
+            });
+        }
+
+        // Add click event listeners to tab buttons
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTab = button.getAttribute('data-tab');
+                switchTab(targetTab);
+                // Close mobile menu if open
+                mobileMenu.classList.add('hidden');
+            });
+        });
+
+        // Mobile menu toggle
+        if (mobileMenuBtn && mobileMenu) {
+            mobileMenuBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+
+        // Donor history toggle simulation
+        const phoneInput = document.querySelector('input[type="tel"]');
+        const donorHistory = document.getElementById('donor-history');
+        
+        if (phoneInput && donorHistory) {
+            phoneInput.addEventListener('blur', function() {
+                if (this.value === '+91 98765 43210' || this.value === '9876543210') {
+                    donorHistory.classList.remove('hidden');
+                } else {
+                    donorHistory.classList.add('hidden');
+                }
+            });
+        }
+
+        // Modal functionality
+        const modal = document.getElementById('donor-details-modal');
+        const donorCards = document.querySelectorAll('[data-event="click:showDonorDetails"]');
+        const closeModalBtn = document.querySelector('[data-event="click:closeModal"]');
+
+        donorCards.forEach(card => {
+            card.addEventListener('click', () => {
+                if (modal) modal.classList.remove('hidden');
+            });
+        });
+
+        if (closeModalBtn && modal) {
+            closeModalBtn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+        }
+
+        // Close modal on background click
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        }
+
+        // Form submission simulation
+        const donationForm = document.querySelector('form');
+        if (donationForm) {
+            donationForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                alert('Donation recorded successfully! Receipt number: RCP-2024-001');
+            });
+        }
+    })();
+    </script>
+</body>
+</html>
