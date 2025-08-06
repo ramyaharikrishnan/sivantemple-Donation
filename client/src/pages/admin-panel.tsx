@@ -55,7 +55,6 @@ export default function AdminPanel() {
   const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
   const [deletingDonation, setDeletingDonation] = useState<Donation | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
-  const [deleteAllConfirmation, setDeleteAllConfirmation] = useState("");
   const { language } = useLanguage();
   const t = useTranslation();
   const { toast } = useToast();
@@ -154,20 +153,14 @@ export default function AdminPanel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      console.log('Deleting donation with ID:', id);
       const response = await fetch(`/api/donations/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
-      console.log('Delete response status:', response.status);
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Delete failed:', errorText);
         throw new Error("Failed to delete donation");
       }
-      const result = await response.json();
-      console.log('Delete result:', result);
-      return result;
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
@@ -205,7 +198,6 @@ export default function AdminPanel() {
         description: language === "ta" ? "அனைத்து நன்கொடைகளும் வெற்றிகரமாக நீக்கப்பட்டன" : "All donations deleted successfully",
       });
       setShowDeleteAllDialog(false);
-      setDeleteAllConfirmation('');
     },
     onError: () => {
       toast({
@@ -221,7 +213,6 @@ export default function AdminPanel() {
   };
 
   const handleDelete = (donation: Donation) => {
-    alert(`handleDelete called for: ${donation.receiptNo}`);
     setDeletingDonation(donation);
   };
 
@@ -232,7 +223,6 @@ export default function AdminPanel() {
   };
 
   const confirmDeleteAll = () => {
-    alert('confirmDeleteAll called - starting deletion');
     deleteAllMutation.mutate();
   };
 
@@ -348,13 +338,10 @@ export default function AdminPanel() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              alert(`Delete All clicked. Donations count: ${donations.length}`);
+            onClick={(e) => {
+              e.preventDefault();
               if (donations.length > 0 && !deleteAllMutation.isPending) {
                 setShowDeleteAllDialog(true);
-                alert('Delete All dialog should open now');
-              } else {
-                alert(`Cannot delete: donations=${donations.length}, pending=${deleteAllMutation.isPending}`);
               }
             }}
             className="text-sm sm:text-base h-10 sm:h-11 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
@@ -652,12 +639,8 @@ export default function AdminPanel() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                          onClick={() => {
-                            alert(`Delete clicked for donation ID: ${donation.id}, Receipt: ${donation.receiptNo}`);
-                            handleDelete(donation);
-                          }}
-                          title="Delete this donation"
+                          className="text-red-600 hover:text-red-800"
+                          onClick={() => handleDelete(donation)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -695,21 +678,27 @@ export default function AdminPanel() {
           <div className="flex justify-end space-x-2 mt-4">
             <Button
               variant="outline"
-              onClick={() => {
-                alert('Cancel clicked');
-                setDeletingDonation(null);
+              onClick={(e) => {
+                e.preventDefault();
+                if (!deleteMutation.isPending) {
+                  setDeletingDonation(null);
+                }
               }}
               disabled={deleteMutation.isPending}
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                alert('Confirm delete clicked');
-                confirmDelete();
+              onClick={(e) => {
+                e.preventDefault();
+                if (!deleteMutation.isPending) {
+                  confirmDelete();
+                }
               }}
               disabled={deleteMutation.isPending}
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
@@ -723,7 +712,9 @@ export default function AdminPanel() {
         onOpenChange={(open) => {
           setShowDeleteAllDialog(open);
           if (!open) {
-            setDeleteAllConfirmation('');
+            // Clear the input when dialog closes
+            const input = document.getElementById('deleteConfirmation') as HTMLInputElement;
+            if (input) input.value = '';
           }
         }}
       >
@@ -765,18 +756,24 @@ export default function AdminPanel() {
               id="deleteConfirmation"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               placeholder="DELETE ALL"
-              value={deleteAllConfirmation}
-              onChange={(e) => {
-                setDeleteAllConfirmation(e.target.value);
+              onInput={(e) => {
+                const input = e.target as HTMLInputElement;
+                const confirmButton = document.getElementById('confirmDeleteAllBtn') as HTMLButtonElement;
+                if (confirmButton) {
+                  confirmButton.disabled = input.value !== 'DELETE ALL' || deleteAllMutation.isPending;
+                }
               }}
             />
             <div className="flex justify-end space-x-2">
               <Button
                 variant="outline"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   if (!deleteAllMutation.isPending) {
                     setShowDeleteAllDialog(false);
-                    setDeleteAllConfirmation('');
+                    // Clear the input
+                    const input = document.getElementById('deleteConfirmation') as HTMLInputElement;
+                    if (input) input.value = '';
                   }
                 }}
                 disabled={deleteAllMutation.isPending}
@@ -787,13 +784,13 @@ export default function AdminPanel() {
               <Button
                 id="confirmDeleteAllBtn"
                 variant="destructive"
-                onClick={() => {
-                  alert('Delete All confirm button clicked');
-                  if (!deleteAllMutation.isPending && deleteAllConfirmation === 'DELETE ALL') {
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!deleteAllMutation.isPending) {
                     confirmDeleteAll();
                   }
                 }}
-                disabled={deleteAllConfirmation !== 'DELETE ALL' || deleteAllMutation.isPending}
+                disabled={true} // Initially disabled until user types confirmation
                 className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deleteAllMutation.isPending 
