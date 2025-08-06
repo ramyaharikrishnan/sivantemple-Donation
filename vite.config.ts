@@ -4,6 +4,7 @@ import path from "path";
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
+   publicDir: path.resolve(__dirname, "public"),
   plugins: [react()],
   resolve: {
     alias: {
@@ -13,8 +14,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "dist"), // Netlify will deploy this
+    outDir: path.resolve(__dirname, "dist"), // ✅ Netlify expects this
     emptyOutDir: true,
   },
-  base: "/", // ✅ Always use this for Netlify
+  base: "./", // ✅ Needed for correct asset loading in Netlify
 });
