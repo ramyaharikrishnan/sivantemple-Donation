@@ -13,8 +13,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "dist"), // ✅ Netlify expects this
+    outDir: path.resolve(__dirname, "dist"), // Netlify will deploy this
     emptyOutDir: true,
   },
-  base: "./", // ✅ Needed for correct asset loading in Netlify
+  base: "/", // ✅ Always use this for Netlify
 });
