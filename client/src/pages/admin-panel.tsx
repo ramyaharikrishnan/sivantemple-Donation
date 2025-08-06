@@ -1,6 +1,6 @@
 import { useState, useEffect, memo, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { LoadingSpinner, FastSkeleton } from "@/components/ui/loading-spinner";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -221,7 +221,6 @@ export default function AdminPanel() {
   };
 
   const handleDelete = (donation: Donation) => {
-    alert(`handleDelete called for: ${donation.receiptNo}`);
     setDeletingDonation(donation);
   };
 
@@ -232,7 +231,6 @@ export default function AdminPanel() {
   };
 
   const confirmDeleteAll = () => {
-    alert('confirmDeleteAll called - starting deletion');
     deleteAllMutation.mutate();
   };
 
@@ -349,12 +347,8 @@ export default function AdminPanel() {
           <Button
             variant="outline"
             onClick={() => {
-              alert(`Delete All clicked. Donations count: ${donations.length}`);
               if (donations.length > 0 && !deleteAllMutation.isPending) {
                 setShowDeleteAllDialog(true);
-                alert('Delete All dialog should open now');
-              } else {
-                alert(`Cannot delete: donations=${donations.length}, pending=${deleteAllMutation.isPending}`);
               }
             }}
             className="text-sm sm:text-base h-10 sm:h-11 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
@@ -654,7 +648,6 @@ export default function AdminPanel() {
                           size="sm"
                           className="text-red-600 hover:text-red-800 hover:bg-red-50"
                           onClick={() => {
-                            alert(`Delete clicked for donation ID: ${donation.id}, Receipt: ${donation.receiptNo}`);
                             handleDelete(donation);
                           }}
                           title="Delete this donation"
@@ -695,20 +688,14 @@ export default function AdminPanel() {
           <div className="flex justify-end space-x-2 mt-4">
             <Button
               variant="outline"
-              onClick={() => {
-                alert('Cancel clicked');
-                setDeletingDonation(null);
-              }}
+              onClick={() => setDeletingDonation(null)}
               disabled={deleteMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                alert('Confirm delete clicked');
-                confirmDelete();
-              }}
+              onClick={() => confirmDelete()}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
@@ -788,7 +775,6 @@ export default function AdminPanel() {
                 id="confirmDeleteAllBtn"
                 variant="destructive"
                 onClick={() => {
-                  alert('Delete All confirm button clicked');
                   if (!deleteAllMutation.isPending && deleteAllConfirmation === 'DELETE ALL') {
                     confirmDeleteAll();
                   }
