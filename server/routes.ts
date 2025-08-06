@@ -488,6 +488,28 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Delete individual donation (protected admin route)
+  app.delete("/api/donations/:id", requireAuth, async (req, res) => {
+    try {
+      const donationId = parseInt(req.params.id);
+      
+      if (!donationId || isNaN(donationId)) {
+        return res.status(400).json({ error: "Invalid donation ID" });
+      }
+
+      const success = await storage.deleteDonation(donationId);
+      
+      if (!success) {
+        return res.status(404).json({ error: "Donation not found" });
+      }
+
+      res.json({ success: true, message: "Donation deleted successfully" });
+    } catch (error) {
+      console.error('Delete donation error:', error);
+      res.status(500).json({ error: "Failed to delete donation" });
+    }
+  });
+
   // Delete all donations (protected superadmin only)
   app.delete("/api/donations/delete-all", requireAuth, async (req, res) => {
     try {

@@ -18,6 +18,7 @@ export interface IStorage {
     startDate?: string;
     endDate?: string;
   }): Promise<Donation[]>;
+  deleteDonation(id: number): Promise<boolean>;
   deleteAllDonations(): Promise<void>;
   
   // Receipt sequences
@@ -86,6 +87,11 @@ export class DatabaseStorage implements IStorage {
   async getDonationsByReceiptNo(receiptNo: string): Promise<Donation | undefined> {
     const [result] = await db.select().from(donations).where(eq(donations.receiptNo, receiptNo));
     return result;
+  }
+
+  async deleteDonation(id: number): Promise<boolean> {
+    const result = await db.delete(donations).where(eq(donations.id, id));
+    return (result.rowCount || 0) > 0;
   }
 
   async deleteAllDonations(): Promise<void> {

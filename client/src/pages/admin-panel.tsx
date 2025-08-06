@@ -152,7 +152,7 @@ export default function AdminPanel() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       const response = await fetch(`/api/donations/${id}`, {
         method: "DELETE",
         credentials: "include",
@@ -218,7 +218,7 @@ export default function AdminPanel() {
 
   const confirmDelete = () => {
     if (deletingDonation) {
-      deleteMutation.mutate((deletingDonation as any)._id || (deletingDonation as any).id);
+      deleteMutation.mutate(deletingDonation.id);
     }
   };
 
