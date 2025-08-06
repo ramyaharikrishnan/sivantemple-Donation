@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "dist"), // ✅ DIRECTLY TO "dist"
+    outDir: path.resolve(__dirname, "dist/public"), // ✅ DIRECTLY TO "dist"
     emptyOutDir: true,
   },
   base: "./", // ✅ for relative path resolution on Netlify
