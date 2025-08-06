@@ -181,7 +181,7 @@ export default function AdminPanel() {
 
   const deleteAllMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/donations/all", {
+      const response = await fetch("/api/donations/delete-all", {
         method: "DELETE",
         credentials: "include",
       });

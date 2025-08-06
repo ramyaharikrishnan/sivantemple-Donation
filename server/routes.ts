@@ -461,6 +461,33 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Delete all donations (protected superadmin only) - MUST be before parameterized routes
+  app.delete("/api/donations/delete-all", requireAuth, async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (session.role !== 'superadmin') {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+      
+      await storage.deleteAllDonations();
+      res.json({ success: true, message: "All donations deleted successfully" });
+    } catch (error) {
+      console.error('Delete all donations error:', error);
+      res.status(500).json({ error: "Failed to delete donations" });
+    }
+  });
+
+  // Search donations by phone (protected) - MUST be before parameterized routes
+  app.get("/api/donations/search/:phone", requireAuth, async (req, res) => {
+    try {
+      const phone = req.params.phone;
+      const donations = await storage.getDonationsByPhone(phone);
+      res.json(donations);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to search donations" });
+    }
+  });
+
   // Get donation by ID (protected)
   app.get("/api/donations/:id", requireAuth, async (req, res) => {
     try {
@@ -474,17 +501,6 @@ export function registerRoutes(app: Express) {
       res.json(donation);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch donation" });
-    }
-  });
-
-  // Search donations by phone (protected)
-  app.get("/api/donations/search/:phone", requireAuth, async (req, res) => {
-    try {
-      const phone = req.params.phone;
-      const donations = await storage.getDonationsByPhone(phone);
-      res.json(donations);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to search donations" });
     }
   });
 
@@ -507,22 +523,6 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Delete donation error:', error);
       res.status(500).json({ error: "Failed to delete donation" });
-    }
-  });
-
-  // Delete all donations (protected superadmin only)
-  app.delete("/api/donations/delete-all", requireAuth, async (req, res) => {
-    try {
-      const session = req.session as any;
-      if (session.role !== 'superadmin') {
-        return res.status(403).json({ error: "Insufficient permissions" });
-      }
-      
-      await storage.deleteAllDonations();
-      res.json({ success: true, message: "All donations deleted successfully" });
-    } catch (error) {
-      console.error('Delete all donations error:', error);
-      res.status(500).json({ error: "Failed to delete donations" });
     }
   });
 
