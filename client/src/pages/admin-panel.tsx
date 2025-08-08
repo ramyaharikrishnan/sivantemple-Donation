@@ -188,19 +188,14 @@ export default function AdminPanel() {
 
   const deleteAllMutation = useMutation({
     mutationFn: async () => {
-      console.log('deleteAllMutation.mutationFn called - making API request');
       const response = await fetch("/api/donations/delete-all", {
         method: "DELETE",
         credentials: "include",
       });
-      console.log('API response status:', response.status);
       if (!response.ok) {
-        console.error('API request failed with status:', response.status);
         throw new Error("Failed to delete all donations");
       }
-      const result = await response.json();
-      console.log('API response:', result);
-      return result;
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
@@ -236,8 +231,6 @@ export default function AdminPanel() {
   };
 
   const confirmDeleteAll = () => {
-    console.log('confirmDeleteAll function called');
-    console.log('About to call deleteAllMutation.mutate()');
     deleteAllMutation.mutate();
   };
 
@@ -761,12 +754,7 @@ export default function AdminPanel() {
               placeholder="DELETE ALL"
               value={deleteAllConfirmation}
               onChange={(e) => {
-                const value = e.target.value;
-                console.log('Input changed to:', `"${value}"`);
-                console.log('Length:', value.length);
-                console.log('Trimmed:', `"${value.trim()}"`);
-                console.log('Matches DELETE ALL?', value.trim() === 'DELETE ALL');
-                setDeleteAllConfirmation(value);
+                setDeleteAllConfirmation(e.target.value);
               }}
             />
             <div className="flex justify-end space-x-2">
@@ -787,17 +775,8 @@ export default function AdminPanel() {
                 id="confirmDeleteAllBtn"
                 variant="destructive"
                 onClick={() => {
-                  console.log('Delete All button clicked');
-                  console.log('deleteAllConfirmation:', deleteAllConfirmation);
-                  console.log('Expected:', 'DELETE ALL');
-                  console.log('Match?', deleteAllConfirmation === 'DELETE ALL');
-                  console.log('isPending?', deleteAllMutation.isPending);
-                  
                   if (!deleteAllMutation.isPending && deleteAllConfirmation.trim() === 'DELETE ALL') {
-                    console.log('Calling confirmDeleteAll...');
                     confirmDeleteAll();
-                  } else {
-                    console.log('Conditions not met for deletion');
                   }
                 }}
                 disabled={deleteAllConfirmation.trim() !== 'DELETE ALL' || deleteAllMutation.isPending}

@@ -718,8 +718,19 @@ function registerRoutes(app2) {
           const dateStr = String(row["Date"] || row["Donation Date"] || row["date"] || "").trim();
           if (dateStr) {
             if (!isNaN(Number(dateStr)) && Number(dateStr) > 4e4) {
-              const excelDate = XLSX.SSF.parse_date_code(Number(dateStr));
-              donationDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+              try {
+                if (XLSX.SSF && XLSX.SSF.parse_date_code) {
+                  const excelDate = XLSX.SSF.parse_date_code(Number(dateStr));
+                  donationDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+                } else {
+                  const excelEpoch = new Date(1900, 0, 1);
+                  const days = Number(dateStr) - 1;
+                  donationDate = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1e3);
+                }
+              } catch (error) {
+                console.warn("Excel date parsing failed, using current date:", error);
+                donationDate = /* @__PURE__ */ new Date();
+              }
             } else {
               const cleanDateStr = dateStr.replace(/[^\d\/\-]/g, "");
               if (cleanDateStr.includes("/")) {

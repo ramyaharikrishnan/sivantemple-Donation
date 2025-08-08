@@ -275,8 +275,22 @@ export function registerRoutes(app: Express) {
           if (dateStr) {
             // Handle Excel serial dates
             if (!isNaN(Number(dateStr)) && Number(dateStr) > 40000) {
-              const excelDate = XLSX.SSF.parse_date_code(Number(dateStr));
-              donationDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+              try {
+                // Try using XLSX.SSF.parse_date_code if available
+                if (XLSX.SSF && XLSX.SSF.parse_date_code) {
+                  const excelDate = XLSX.SSF.parse_date_code(Number(dateStr));
+                  donationDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+                } else {
+                  // Fallback: Convert Excel serial date manually
+                  // Excel epoch is 1900-01-01, but Excel incorrectly treats 1900 as leap year
+                  const excelEpoch = new Date(1900, 0, 1);
+                  const days = Number(dateStr) - 1; // Excel serial date starts from 1
+                  donationDate = new Date(excelEpoch.getTime() + (days * 24 * 60 * 60 * 1000));
+                }
+              } catch (error) {
+                console.warn('Excel date parsing failed, using current date:', error);
+                donationDate = new Date();
+              }
             } else {
               // Parse various date formats with DD/MM/YYYY priority
               const cleanDateStr = dateStr.replace(/[^\d\/\-]/g, '');

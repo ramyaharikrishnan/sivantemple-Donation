@@ -29,6 +29,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -90,6 +91,14 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     loginMutation.mutate(data);
   };
 
+  // Handle Enter key in input fields
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loginMutation.isPending) {
+      e.preventDefault();
+      form.handleSubmit(onSubmit)();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -112,7 +121,11 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form 
+              onSubmit={form.handleSubmit(onSubmit)} 
+              className="space-y-6"
+              autoComplete="on"
+            >
               {error && (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
@@ -131,6 +144,9 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                       type="text"
                       placeholder={language === "en" ? "Enter username" : "பயனர் பெயரை உள்ளிடவும்"}
                       className="pl-10 h-12"
+                      onKeyDown={handleKeyDown}
+                      autoComplete="username"
+                      autoFocus
                       {...form.register("username")}
                     />
                   </div>
@@ -152,6 +168,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                       type={showPassword ? "text" : "password"}
                       placeholder={language === "en" ? "Enter password" : "கடவுச்சொல்லை உள்ளிடவும்"}
                       className="pl-10 pr-10 h-12"
+                      onKeyDown={handleKeyDown}
+                      autoComplete="current-password"
                       {...form.register("password")}
                     />
                     <button
@@ -176,8 +194,14 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
               <Button
                 type="submit"
-                className="w-full bg-temple-primary hover:bg-temple-primary/90 h-12 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-temple-primary hover:bg-temple-primary/90 h-12 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 disabled={loginMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!loginMutation.isPending) {
+                    form.handleSubmit(onSubmit)();
+                  }
+                }}
               >
                 {loginMutation.isPending
                   ? (language === "en" ? "Signing in..." : "உள்நுழைகிறது...")
