@@ -3,8 +3,8 @@
 // Predefined secure admin accounts
 const PREDEFINED_ADMINS = [
   {
-    username: process.env.ADMIN_USERNAME || "templeadmin",
-    password: process.env.ADMIN_PASSWORD || "Temple@2025#Secure",
+    username: process.env.ADMIN_USERNAME || "MPEswar",
+    password: process.env.ADMIN_PASSWORD || "Skbi#1948",
     role: 'superadmin',
     createdAt: new Date(),
   },
