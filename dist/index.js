@@ -553,19 +553,13 @@ function registerRoutes(app2) {
         req.session.save((err) => {
           if (err) {
             console.error("Session save error:", err);
-            return res.status(500).json({ error: "Session creation failed" });
           }
-          console.log("Session saved successfully:", {
-            sessionID: req.sessionID,
-            username: admin.username,
-            role: admin.role
-          });
-          res.json({
-            success: true,
-            message: "Login successful",
-            username: admin.username,
-            role: admin.role
-          });
+        });
+        res.json({
+          success: true,
+          message: "Login successful",
+          username: admin.username,
+          role: admin.role
         });
       } else {
         res.status(401).json({ error: "Invalid credentials" });
@@ -586,20 +580,11 @@ function registerRoutes(app2) {
   });
   app2.get("/api/auth/status", (req, res) => {
     const session2 = req.session;
-    console.log("Auth status check:", {
-      sessionID: req.sessionID,
-      sessionData: session2,
-      isAuthenticated: !!session2?.isAuthenticated,
-      username: session2?.username,
-      role: session2?.role
-    });
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+    res.setHeader("Cache-Control", "private, max-age=5");
     res.json({
-      isAuthenticated: !!session2?.isAuthenticated,
-      username: session2?.username || null,
-      role: session2?.role || null
+      isAuthenticated: !!session2.isAuthenticated,
+      username: session2.username || null,
+      role: session2.role || null
     });
   });
   app2.post("/api/auth/change-credentials", requireAuth, async (req, res) => {
@@ -1284,27 +1269,24 @@ var app = express();
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => {
-  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|map)$/)) {
-    res.setHeader("Cache-Control", "public, max-age=31536000");
-    res.setHeader("ETag", "strong");
+  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$/)) {
+    res.setHeader("Cache-Control", "public, max-age=86400");
   }
-  res.setHeader("X-Powered-By", "Temple-Donation-System");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Powered-By", "MERN-Stack-Express");
   next();
 });
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static("public"));
 app.use(session({
   secret: process.env.SESSION_SECRET || "temple-donation-secret-key-change-in-production",
-  resave: true,
-  saveUninitialized: true,
-  rolling: true,
+  resave: false,
+  saveUninitialized: false,
   cookie: {
     secure: false,
+    // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1e3,
+    maxAge: 24 * 60 * 60 * 1e3
     // 24 hours
-    sameSite: "lax"
   }
 }));
 app.use((req, res, next) => {
@@ -1333,49 +1315,40 @@ app.use((req, res, next) => {
 });
 (async () => {
   registerRoutes(app);
-  const distPath = path.resolve(process.cwd(), "dist/public");
-  app.use(express.static(distPath, {
-    maxAge: "1d",
-    etag: true,
-    lastModified: true,
-    setHeaders: (res, path2) => {
-      if (path2.includes("assets/")) {
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-      }
-    }
-  }));
-  app.get("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"), (err) => {
-      if (err) {
-        console.error("Error serving index.html:", err);
-        res.status(500).send(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Temple Donation System</title>
-            </head>
-            <body>
-              <div id="root">
-                <div style="text-align: center; padding: 50px;">
-                  <h2>Loading Temple Donation System...</h2>
-                  <p>Please wait while the application loads.</p>
-                </div>
-              </div>
-            </body>
-          </html>
-        `);
-      }
-    });
-  });
+  const server = createServer(app);
+  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 PostgreSQL Database Connected - Data will be persistent`);
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    console.error("Express error:", err);
     res.status(status).json({ message });
+    console.error(err);
   });
-  const server = createServer(app);
-  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 PostgreSQL Database Connected - Data will be persistent`);
-  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 Serving static files from ${distPath}`);
+  const distPath = path.resolve(process.cwd(), "dist/public");
+  try {
+    app.use(express.static(distPath));
+    app.use("*", (_req, res) => {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
+    console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 Serving static files from ${distPath}`);
+  } catch (error) {
+    console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u26A0 Static files not found, running in development mode`);
+    app.get("*", (_req, res) => {
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Temple Donation System</title>
+          </head>
+          <body>
+            <div id="root">Loading...</div>
+            <script>
+              window.location.href = '/api/health';
+            </script>
+          </body>
+        </html>
+      `);
+    });
+  }
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5e3;
   server.listen(port, "0.0.0.0", () => {
     console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] serving on localhost:${port}`);

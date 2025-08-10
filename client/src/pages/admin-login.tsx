@@ -1,837 +1,219 @@
-import { useState, useEffect, memo, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-
-import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate, formatPhoneNumber } from "@/lib/utils";
-import { formatCurrencyTamil, formatDateTamil } from "@/lib/i18n";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Lock, User, Building2, Eye, EyeOff } from "lucide-react";
 import { useLanguage, useTranslation } from "@/contexts/LanguageContext";
-import { Download, Plus, Edit, Trash2, LogOut, Settings, AlertTriangle, Calendar as CalendarIcon } from "lucide-react";
-// Removed TypeScript imports - using JavaScript
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Modal } from "@/components/ui/modal";
-import AdminLogin from "./admin-login";
-import AdminSettings from "./admin-settings";
-import DonationForm from "./donation-form";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-// Types - using inline types for better compatibility
-interface Donation {
-  id: number;
-  receiptNo: string;
-  name: string;
-  phone: string;
-  community: string;
-  location: string;
-  address?: string;
-  amount: number;
-  paymentMode: string;
-  inscription: boolean;
-  donationDate?: Date | string | null;
-  createdAt: Date | string;
+
+const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
+
+interface AdminLoginProps {
+  onLoginSuccess: () => void;
 }
 
-export default function AdminPanel() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [username, setUsername] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [showManualEntry, setShowManualEntry] = useState(false);
-  const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
-  const [deletingDonation, setDeletingDonation] = useState<Donation | null>(null);
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
-  const [deleteAllConfirmation, setDeleteAllConfirmation] = useState("");
+export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const { language } = useLanguage();
   const t = useTranslation();
-  const { toast } = useToast();
-  const [filters, setFilters] = useState({
-    dateRange: "all",
-    community: "any",
-    paymentMode: "all",
-    amountRange: "all",
-    startDate: "",
-    endDate: "",
-  });
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Check authentication status on component mount (optimized for speed)
-  useEffect(() => {
-    const checkAuth = async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500); // Fast 1.5 second timeout
-      
-      try {
-        const response = await fetch("/api/auth/status", {
-          credentials: "include",
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        const data = await response.json();
-        setIsAuthenticated(data.isAuthenticated);
-        setUsername(data.username || "");
-      } catch (error) {
-        clearTimeout(timeoutId);
-        setIsAuthenticated(false);
-      }
-    };
-    checkAuth();
-  }, []);
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      setIsAuthenticated(false);
-      setUsername("");
+  const form = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: "",
+      password: "",
     },
   });
 
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    // Re-check authentication status to get username (fast version)
-    const checkAuth = async () => {
+  const loginMutation = useMutation({
+    mutationFn: async (data: LoginForm) => {
+      // Fast login optimization - reduce timeout and add compression
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1000); // Very fast 1 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
       
       try {
-        const response = await fetch("/api/auth/status", {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept-Encoding": "gzip, deflate"
+          },
           credentials: "include",
+          body: JSON.stringify(data),
           signal: controller.signal
         });
         clearTimeout(timeoutId);
-        const data = await response.json();
-        setIsAuthenticated(data.isAuthenticated);
-        setUsername(data.username || "");
-      } catch (error) {
-        clearTimeout(timeoutId);
-        setIsAuthenticated(false);
-      }
-    };
-    checkAuth();
-  };
-
-  const { data: donations = [], isLoading } = useQuery<Donation[]>({
-    queryKey: ["/api/donations", filters],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== "all" && value !== "any") {
-          params.append(key, value);
+        
+        if (!response.ok) {
+          throw new Error("Invalid credentials");
         }
-      });
-
-      const response = await fetch(`/api/donations?${params}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch donations");
+        return response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
       }
-
-      return response.json();
     },
-    enabled: isAuthenticated === true, // Only run query when authenticated
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      console.log('Deleting donation with ID:', id);
-      const response = await fetch(`/api/donations/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      console.log('Delete response status:', response.status);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Delete failed:', errorText);
-        throw new Error("Failed to delete donation");
-      }
-      const result = await response.json();
-      console.log('Delete result:', result);
-      return result;
+    onSuccess: async () => {
+      setError("");
+      // Invalidate specific queries instead of clearing all for faster load
+      await queryClient.invalidateQueries({ queryKey: ['/api/auth/status'] });
+      await queryClient.invalidateQueries({ queryKey: ['donations'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      // Small delay to ensure queries are invalidated
+      setTimeout(() => {
+        onLoginSuccess();
+      }, 50);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
-      toast({
-        title: "Success",
-        description: "Donation deleted successfully",
-      });
-      setDeletingDonation(null);
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete donation",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      setError(error.message || "Login failed");
     },
   });
 
-  const deleteAllMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/donations/delete-all", {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete all donations");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({
-        title: "Success",
-        description: language === "ta" ? "அனைத்து நன்கொடைகளும் வெற்றிகரமாக நீக்கப்பட்டன" : "All donations deleted successfully",
-      });
-      setShowDeleteAllDialog(false);
-      setDeleteAllConfirmation('');
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: language === "ta" ? "அனைத்து நன்கொடைகளையும் நீக்க முடியவில்லை" : "Failed to delete all donations",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleLogout = () => {
-    logoutMutation.mutate();
+  const onSubmit = (data: LoginForm) => {
+    // Prevent double submission
+    if (loginMutation.isPending) {
+      return;
+    }
+    setError("");
+    loginMutation.mutate(data);
   };
 
-  const handleDelete = (donation: Donation) => {
-    setDeletingDonation(donation);
-  };
-
-  const confirmDelete = () => {
-    if (deletingDonation) {
-      deleteMutation.mutate(deletingDonation.id);
+  // Handle Enter key in input fields
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loginMutation.isPending) {
+      e.preventDefault();
+      form.handleSubmit(onSubmit)();
     }
   };
-
-  const confirmDeleteAll = () => {
-    deleteAllMutation.mutate();
-  };
-
-  const handleExport = async () => {
-    try {
-      const response = await fetch("/api/donations/export", {
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "donations.csv";
-        a.click();
-        window.URL.revokeObjectURL(url);
-      }
-    } catch (error) {
-      console.error("Export failed:", error);
-    }
-  };
-
-  const getPaymentModeColor = (mode: string) => {
-    const colors: Record<string, string> = {
-      cash: "bg-green-100 text-green-800",
-      upi: "bg-blue-100 text-blue-800",
-      card: "bg-purple-100 text-purple-800",
-      "bank-transfer": "bg-orange-100 text-orange-800",
-      cheque: "bg-gray-100 text-gray-800",
-    };
-    return colors[mode] || "bg-gray-100 text-gray-800";
-  };
-
-  // Show login form if not authenticated
-  if (isAuthenticated === false) {
-    return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  // Show loading while checking authentication
-  if (isAuthenticated === null) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">
-          {language === "en" ? "Loading..." : "ஏற்றுகிறது..."}
-        </div>
-      </div>
-    );
-  }
-
-  // Show settings page if requested
-  if (showSettings) {
-    return <AdminSettings onBack={() => setShowSettings(false)} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">
-          {language === "en"
-            ? "Loading donations..."
-            : "நன்கொடைகளை ஏற்றுகிறது..."}
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="w-full space-y-4 sm:space-y-6 px-2 sm:px-4">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg sm:text-2xl font-semibold text-gray-900">
-            {t("adminPanel")}
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <Building2 className="mx-auto h-12 w-12 text-temple-primary" />
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+            {language === "en" ? "Admin Login" : "நிர்வாக உள்நுழைவு"}
           </h2>
-          <div className="text-sm text-gray-500">
-            {language === "en"
-              ? `Welcome, ${username}`
-              : `வரவேற்கிறோம், ${username}`}
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button
-            className="bg-temple-primary hover:bg-temple-primary/90 text-sm sm:text-base h-10 sm:h-11 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={(e) => {
-              e.preventDefault();
-              setShowManualEntry(true);
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {language === "en" ? "Add Manual Entry" : "கைமுறை பதிவு சேர்"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={(e) => {
-              e.preventDefault();
-              handleExport();
-            }}
-            className="text-sm sm:text-base h-10 sm:h-11 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {t("export")}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={(e) => {
-              e.preventDefault();
-              setShowSettings(true);
-            }}
-            className="text-sm sm:text-base h-10 sm:h-11 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            {language === "en" ? "Settings" : "அமைப்புகள்"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (donations.length > 0 && !deleteAllMutation.isPending) {
-                setShowDeleteAllDialog(true);
-              }
-            }}
-            className="text-sm sm:text-base h-10 sm:h-11 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-            disabled={donations.length === 0 || deleteAllMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            {deleteAllMutation.isPending 
-              ? (language === "en" ? "Deleting..." : "நீக்குகிறது...")
-              : (language === "en" ? "Delete All" : "அனைத்தையும் நீக்கு")
-            }
-          </Button>
-          <Button
-            variant="outline"
-            onClick={(e) => {
-              e.preventDefault();
-              if (!logoutMutation.isPending) {
-                handleLogout();
-              }
-            }}
-            className="text-sm sm:text-base h-10 sm:h-11 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={logoutMutation.isPending}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            {logoutMutation.isPending
-              ? (language === "en" ? "Logging out..." : "வெளியேறுகிறது...")
-              : (language === "en" ? "Logout" : "வெளியேறு")
-            }
-          </Button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <Card className="shadow-lg">
-        <CardContent className="p-3 sm:p-6">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-            {language === "en" ? "Filters" : "வடிகட்டிகள்"}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date Range
-              </label>
-              <Select
-                value={filters.dateRange}
-                onValueChange={(value) => {
-                  setFilters((prev) => ({ ...prev, dateRange: value }));
-                  if (value !== "custom") {
-                    setFilters((prev) => ({ ...prev, startDate: "", endDate: "" }));
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Custom Date Range Inputs */}
-            {filters.dateRange === "custom" && (
-              <>
-                <div>
-                  <Label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) =>
-                      setFilters((prev) => ({ ...prev, startDate: e.target.value }))
-                    }
-                    className="h-10"
-                  />
-                </div>
-                <div>
-                  <Label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) =>
-                      setFilters((prev) => ({ ...prev, endDate: e.target.value }))
-                    }
-                    className="h-10"
-                  />
-                </div>
-              </>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kulam
-              </label>
-              <Select
-                value={filters.community}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, community: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Kulam" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">
-                    {language === "en" ? "Any" : "எதையும்"}
-                  </SelectItem>
-                  <SelectItem value="payiran">{t("payiran")}</SelectItem>
-                  <SelectItem value="semban">{t("semban")}</SelectItem>
-                  <SelectItem value="othaalan">{t("othaalan")}</SelectItem>
-                  <SelectItem value="aavan">{t("aavan")}</SelectItem>
-                  <SelectItem value="aadai">{t("aadai")}</SelectItem>
-                  <SelectItem value="vizhiyan">{t("vizhiyan")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Mode
-              </label>
-              <Select
-                value={filters.paymentMode}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, paymentMode: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Modes</SelectItem>
-                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount Range
-              </label>
-              <Select
-                value={filters.amountRange}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, amountRange: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Amounts</SelectItem>
-                  <SelectItem value="0-1000">₹0 - ₹1,000</SelectItem>
-                  <SelectItem value="1001-5000">₹1,001 - ₹5,000</SelectItem>
-                  <SelectItem value="5001-10000">₹5,001 - ₹10,000</SelectItem>
-                  <SelectItem value="10000+">₹10,000+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Donations Table */}
-      <Card>
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">
-              All Donations
-            </h3>
-            <p className="text-sm text-gray-600">
-              Showing {donations.length} record
-              {donations.length !== 1 ? "s" : ""}
-            </p>
-          </div>
+          <p className="mt-2 text-sm text-gray-600">
+            {language === "en" 
+              ? "Sign in to access the admin panel" 
+              : "நிர்வாக பாட்டை அணுக உள்நுழைக"}
+          </p>
         </div>
 
-        <div className="overflow-auto max-h-96 border-t">
-          {isLoading ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500">Loading donations...</p>
-            </div>
-          ) : donations.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500">
-                No donations found matching your criteria
-              </p>
-            </div>
-          ) : (
-            <table className="w-full text-sm min-w-max">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    S.No
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Receipt No
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kulam
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Address
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Phone
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment Mode
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Inscription
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {donations.map((donation, index) => (
-                  <tr key={(donation as any)._id || (donation as any).id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {index + 1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-temple-primary">
-                      {donation.receiptNo}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {donation.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {donation.community || "-"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {donation.location || "-"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {(donation as any).address || "-"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatPhoneNumber(donation.phone)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-temple-primary">
-                      {formatCurrency(donation.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge
-                        className={getPaymentModeColor(donation.paymentMode)}
-                      >
-                        {donation.paymentMode.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {donation.inscription ? "Yes" : "No"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {(() => {
-                        const displayDate = donation.donationDate || donation.createdAt;
-                        return new Date(displayDate).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: '2-digit', 
-                          year: 'numeric'
-                        });
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-temple-primary hover:text-temple-primary/80"
-                          onClick={() => setEditingDonation(donation)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                          onClick={() => {
-                            handleDelete(donation);
-                          }}
-                          title="Delete this donation"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </Card>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={!!deletingDonation}
-        onOpenChange={() => setDeletingDonation(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this donation record? This action
-              cannot be undone.
-              <br />
-              <br />
-              <strong>Receipt:</strong> {(deletingDonation as any)?.receiptNo}
-              <br />
-              <strong>Donor:</strong> {(deletingDonation as any)?.name}
-              <br />
-              <strong>Amount:</strong>{" "}
-              {deletingDonation && formatCurrency((deletingDonation as any).amount)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setDeletingDonation(null)}
-              disabled={deleteMutation.isPending}
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-center text-lg">
+              {language === "en" ? "Temple Admin Access" : "கோயில் நிர்வாக அணுகல்"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form 
+              onSubmit={form.handleSubmit(onSubmit)} 
+              className="space-y-6"
+              autoComplete="on"
             >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => confirmDelete()}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
 
-      {/* Delete All Confirmation Dialog */}
-      <Dialog
-        open={showDeleteAllDialog}
-        onOpenChange={(open) => {
-          setShowDeleteAllDialog(open);
-          if (!open) {
-            setDeleteAllConfirmation('');
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              {language === "en" ? "Delete All Donations" : "அனைத்து நன்கொடைகளையும் நீக்கு"}
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              <div className="space-y-3">
-                <p className="font-medium text-red-800">
-                  {language === "en" 
-                    ? "⚠️ WARNING: This action is irreversible!"
-                    : "⚠️ எச்சரிக்கை: இந்த செயலை மாற்ற முடியாது!"}
-                </p>
-                <p>
-                  {language === "en" 
-                    ? `You are about to permanently delete all ${donations.length} donation records from the database. This will:`
-                    : `நீங்கள் ${donations.length} நன்கொடை பதிவுகளை தரவுத்தளத்திலிருந்து நிரந்தரமாக நீக்க போகிறீர்கள். இது:`}
-                </p>
-                <ul className="list-disc pl-5 space-y-1 text-sm">
-                  <li>{language === "en" ? "Remove all donation history" : "அனைத்து நன்கொடை வரலாறுகளையும் நீக்கும்"}</li>
-                  <li>{language === "en" ? "Clear all donor records" : "அனைத்து நன்கொடையாளர் பதிவுகளையும் அழிக்கும்"}</li>
-                  <li>{language === "en" ? "Reset dashboard statistics" : "டாஷ்போர்டு புள்ளிவிவரங்களை ரீசெட் செய்யும்"}</li>
-                  <li>{language === "en" ? "Cannot be undone" : "மாற்ற முடியாது"}</li>
-                </ul>
-                <p className="font-medium text-gray-900">
-                  {language === "en" 
-                    ? "Type 'DELETE ALL' to confirm:"
-                    : "'DELETE ALL' என்று டைப் செய்து உறுதிப்படுத்தவும்:"}
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="username" className="text-sm font-medium">
+                    {language === "en" ? "Username" : "பயனர் பெயர்"}
+                  </Label>
+                  <div className="relative mt-1">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder={language === "en" ? "Enter username" : "பயனர் பெயரை உள்ளிடவும்"}
+                      className="pl-10 h-12"
+                      onKeyDown={handleKeyDown}
+                      autoComplete="username"
+                      autoFocus
+                      {...form.register("username")}
+                    />
+                  </div>
+                  {form.formState.errors.username && (
+                    <p className="text-sm text-red-600 mt-1">
+                      {form.formState.errors.username.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="password" className="text-sm font-medium">
+                    {language === "en" ? "Password" : "கடவுச்சொல்"}
+                  </Label>
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder={language === "en" ? "Enter password" : "கடவுச்சொல்லை உள்ளிடவும்"}
+                      className="pl-10 pr-10 h-12"
+                      onKeyDown={handleKeyDown}
+                      autoComplete="current-password"
+                      {...form.register("password")}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowPassword(!showPassword)}
+                      title={showPassword ? 
+                        (language === "en" ? "Hide password" : "கடவுச்சொல்லை மறைக்க") : 
+                        (language === "en" ? "Show password" : "கடவுச்சொல்லைக் காட்ட")
+                      }
+                    >
+                      {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {form.formState.errors.password && (
+                    <p className="text-sm text-red-600 mt-1">
+                      {form.formState.errors.password.message}
+                    </p>
+                  )}
+                </div>
               </div>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <input
-              type="text"
-              id="deleteConfirmation"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              placeholder="DELETE ALL"
-              value={deleteAllConfirmation}
-              onChange={(e) => {
-                setDeleteAllConfirmation(e.target.value);
-              }}
-            />
-            <div className="flex justify-end space-x-2">
+
               <Button
-                variant="outline"
-                onClick={() => {
-                  if (!deleteAllMutation.isPending) {
-                    setShowDeleteAllDialog(false);
-                    setDeleteAllConfirmation('');
+                type="submit"
+                className="w-full bg-temple-primary hover:bg-temple-primary/90 h-12 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                disabled={loginMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!loginMutation.isPending) {
+                    form.handleSubmit(onSubmit)();
                   }
                 }}
-                disabled={deleteAllMutation.isPending}
-                className="disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {language === "en" ? "Cancel" : "ரத்து"}
+                {loginMutation.isPending
+                  ? (language === "en" ? "Signing in..." : "உள்நுழைகிறது...")
+                  : (language === "en" ? "Sign In" : "உள்நுழை")
+                }
               </Button>
-              <Button
-                id="confirmDeleteAllBtn"
-                variant="destructive"
-                onClick={() => {
-                  if (!deleteAllMutation.isPending && deleteAllConfirmation.trim() === 'DELETE ALL') {
-                    confirmDeleteAll();
-                  }
-                }}
-                disabled={deleteAllConfirmation.trim() !== 'DELETE ALL' || deleteAllMutation.isPending}
-                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {deleteAllMutation.isPending 
-                  ? (language === "en" ? "Deleting..." : "நீக்குகிறது...")
-                  : (language === "en" ? "Delete All" : "அனைத்தையும் நீக்கு")}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </form>
 
-      {/* Manual Entry Modal */}
-      {showManualEntry && (
-        <Modal
-          isOpen={showManualEntry}
-          onClose={() => setShowManualEntry(false)}
-          title={language === "en" ? "Add Manual Entry" : "கைமுறை பதிவு சேர்"}
-          size="xl"
-        >
-          <DonationForm
-            initialData={undefined}
-            onSuccess={() => {
-              setShowManualEntry(false);
-              queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
-              toast({
-                title: language === "en" ? "Success" : "வெற்றி",
-                description: language === "en" 
-                  ? "Manual donation entry added successfully!"
-                  : "கைமுறை நன்கொடை பதிவு வெற்றிகரமாக சேர்க்கப்பட்டது!",
-              });
-            }}
-          />
-        </Modal>
-      )}
 
-      {/* Edit Modal */}
-      {editingDonation && (
-        <Modal
-          isOpen={!!editingDonation}
-          onClose={() => setEditingDonation(null)}
-          title="Edit Donation"
-          size="xl"
-        >
-          <DonationForm
-            initialData={editingDonation as any}
-            onSuccess={() => {
-              setEditingDonation(null);
-              queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
-            }}
-          />
-        </Modal>
-      )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

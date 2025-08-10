@@ -53,30 +53,22 @@ export function registerRoutes(app: Express) {
       clearTimeout(authTimeout);
       
       if (admin) {
-        // Set session data
         (req.session as any).isAuthenticated = true;
         (req.session as any).username = admin.username;
         (req.session as any).role = admin.role;
         
-        // Force session save and wait for completion
+        // Immediate session save for fast login
         req.session.save((err: any) => {
           if (err) {
             console.error('Session save error:', err);
-            return res.status(500).json({ error: "Session creation failed" });
           }
-          
-          console.log('Session saved successfully:', {
-            sessionID: req.sessionID,
-            username: admin.username,
-            role: admin.role
-          });
-          
-          res.json({ 
-            success: true, 
-            message: "Login successful", 
-            username: admin.username,
-            role: admin.role 
-          });
+        });
+        
+        res.json({ 
+          success: true, 
+          message: "Login successful", 
+          username: admin.username,
+          role: admin.role 
         });
       } else {
         res.status(401).json({ error: "Invalid credentials" });
@@ -100,23 +92,12 @@ export function registerRoutes(app: Express) {
   app.get("/api/auth/status", (req, res) => {
     const session = req.session as any;
     
-    console.log('Auth status check:', {
-      sessionID: req.sessionID,
-      sessionData: session,
-      isAuthenticated: !!session?.isAuthenticated,
-      username: session?.username,
-      role: session?.role
-    });
-    
-    // Disable cache for auth status to always get fresh data
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    
+    // Fast auth status with caching for better performance
+    res.setHeader('Cache-Control', 'private, max-age=5'); // 5 second cache
     res.json({
-      isAuthenticated: !!session?.isAuthenticated,
-      username: session?.username || null,
-      role: session?.role || null
+      isAuthenticated: !!session.isAuthenticated,
+      username: session.username || null,
+      role: session.role || null
     });
   });
 

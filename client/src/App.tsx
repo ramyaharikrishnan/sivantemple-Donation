@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from "react";
+import React, { useState } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Menu, Building2, Languages, Plus, Search, BarChart3, Upload, Link, Settings, LogOut } from "lucide-react";
 import { LanguageProvider, useLanguage, useTranslation } from "@/contexts/LanguageContext";
 
-// Import components directly for debugging render issues
 import DonationForm from "@/pages/donation-form";
 import DonorLookup from "@/pages/donor-lookup";
 import Dashboard from "@/pages/dashboard";
@@ -17,13 +16,6 @@ import AdminPanel from "@/pages/admin-panel";
 import AdminLogin from "@/pages/admin-login";
 import GoogleFormIntegration from "@/pages/google-form-integration";
 import NotFound from "@/pages/not-found";
-
-// Loading component
-const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-64">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-primary"></div>
-  </div>
-);
 // Removed InstallPrompt - no longer using PWA functionality
 
 
@@ -233,38 +225,33 @@ function Navigation() {
 // Protected Route Component
 function ProtectedRoute({ component: Component, ...props }: any) {
   const [location, setLocation] = useLocation();
-  const { data: authStatus, isLoading, error } = useQuery<AuthStatus>({
+  const { data: authStatus, isLoading } = useQuery<AuthStatus>({
     queryKey: ["/api/auth/status"],
-    retry: 1, // Single retry only
-    staleTime: 60 * 1000, // 60 seconds fresh - longer cache
-    gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false, // Don't refetch on mount
+    retry: false,
+    staleTime: 0, // Always fresh
+    refetchOnWindowFocus: true,
+    refetchInterval: 5000, // Check every 5 seconds
   });
 
-  // Handle loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-primary mx-auto"></div>
-          <p className="mt-2 text-gray-600">Checking authentication...</p>
+          <p className="mt-2 text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Handle error or not authenticated
-  if (error || !authStatus?.isAuthenticated) {
+  if (!authStatus?.isAuthenticated) {
     return <AdminLogin onLoginSuccess={async () => {
       // Invalidate auth query and wait for it to refetch
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/status"] });
       // Small delay to ensure auth status is updated
       setTimeout(() => {
-        // Redirect to the current location after login
-        window.location.reload();
+        // Stay in admin panel after login instead of redirecting to dashboard
+        setLocation("/admin");
       }, 100);
     }} />;
   }
