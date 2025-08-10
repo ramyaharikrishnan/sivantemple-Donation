@@ -28,12 +28,14 @@ app.use(express.static('public'));
 // Session configuration
 app.use((session as any)({
   secret: process.env.SESSION_SECRET || 'temple-donation-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false,
+  resave: true,
+  saveUninitialized: true,
+  rolling: true,
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
   }
 }));
 

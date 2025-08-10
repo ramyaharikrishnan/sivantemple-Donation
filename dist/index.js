@@ -553,13 +553,19 @@ function registerRoutes(app2) {
         req.session.save((err) => {
           if (err) {
             console.error("Session save error:", err);
+            return res.status(500).json({ error: "Session creation failed" });
           }
-        });
-        res.json({
-          success: true,
-          message: "Login successful",
-          username: admin.username,
-          role: admin.role
+          console.log("Session saved successfully:", {
+            sessionID: req.sessionID,
+            username: admin.username,
+            role: admin.role
+          });
+          res.json({
+            success: true,
+            message: "Login successful",
+            username: admin.username,
+            role: admin.role
+          });
         });
       } else {
         res.status(401).json({ error: "Invalid credentials" });
@@ -1279,14 +1285,15 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.static("public"));
 app.use(session({
   secret: process.env.SESSION_SECRET || "temple-donation-secret-key-change-in-production",
-  resave: false,
-  saveUninitialized: false,
+  resave: true,
+  saveUninitialized: true,
+  rolling: true,
   cookie: {
     secure: false,
-    // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1e3
+    maxAge: 24 * 60 * 60 * 1e3,
     // 24 hours
+    sameSite: "lax"
   }
 }));
 app.use((req, res, next) => {

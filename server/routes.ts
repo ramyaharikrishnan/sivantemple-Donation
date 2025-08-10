@@ -53,22 +53,30 @@ export function registerRoutes(app: Express) {
       clearTimeout(authTimeout);
       
       if (admin) {
+        // Set session data
         (req.session as any).isAuthenticated = true;
         (req.session as any).username = admin.username;
         (req.session as any).role = admin.role;
         
-        // Immediate session save for fast login
+        // Force session save and wait for completion
         req.session.save((err: any) => {
           if (err) {
             console.error('Session save error:', err);
+            return res.status(500).json({ error: "Session creation failed" });
           }
-        });
-        
-        res.json({ 
-          success: true, 
-          message: "Login successful", 
-          username: admin.username,
-          role: admin.role 
+          
+          console.log('Session saved successfully:', {
+            sessionID: req.sessionID,
+            username: admin.username,
+            role: admin.role
+          });
+          
+          res.json({ 
+            success: true, 
+            message: "Login successful", 
+            username: admin.username,
+            role: admin.role 
+          });
         });
       } else {
         res.status(401).json({ error: "Invalid credentials" });
