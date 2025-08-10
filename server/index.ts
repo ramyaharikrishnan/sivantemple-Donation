@@ -28,30 +28,7 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false }));
 
-// Optimized static file serving with performance enhancements  
-app.use(express.static('public', {
-  maxAge: '1d', // 1 day cache for public files
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, path) => {
-    // Extra caching for immutable assets
-    if (path.includes('assets/')) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-  }
-}));
-
-// Serve React app static files with optimized caching
-app.use(express.static('dist/public', {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, path) => {
-    if (path.includes('assets/')) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-  }
-}));
+// Note: Static file serving moved to async function below
 
 // Session configuration
 app.use((session as any)({
@@ -98,51 +75,61 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Register PostgreSQL routes
+  // Register PostgreSQL routes FIRST
   registerRoutes(app);
   
-  const server = createServer(app);
+  // Serve static files from dist/public
+  const distPath = path.resolve(process.cwd(), "dist/public");
   
-  console.log(`${new Date().toLocaleTimeString()} [express] ✓ PostgreSQL Database Connected - Data will be persistent`);
+  // Static file serving with proper fallback
+  app.use(express.static(distPath, {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, path) => {
+      if (path.includes('assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+  
+  // Catch-all handler for SPA routing - MUST come after API routes
+  app.get("*", (_req, res) => {
+    res.sendFile(path.resolve(distPath, "index.html"), (err) => {
+      if (err) {
+        console.error('Error serving index.html:', err);
+        res.status(500).send(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Temple Donation System</title>
+            </head>
+            <body>
+              <div id="root">
+                <div style="text-align: center; padding: 50px;">
+                  <h2>Loading Temple Donation System...</h2>
+                  <p>Please wait while the application loads.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+    });
+  });
 
+  // Error handling middleware MUST come after all routes
   app.use((err: any, _req: any, res: any, _next: any) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
+    
+    console.error('Express error:', err);
     res.status(status).json({ message });
-    console.error(err);
   });
-
-  // Serve static files from dist/public if available, otherwise use current setup
-  const distPath = path.resolve(process.cwd(), "dist/public");
   
-  try {
-    // Try to serve static files from build directory
-    app.use(express.static(distPath));
-    app.use("*", (_req, res) => {
-      res.sendFile(path.resolve(distPath, "index.html"));
-    });
-    console.log(`${new Date().toLocaleTimeString()} [express] ✓ Serving static files from ${distPath}`);
-  } catch (error) {
-    // Fallback to development mode
-    console.log(`${new Date().toLocaleTimeString()} [express] ⚠ Static files not found, running in development mode`);
-    app.get("*", (_req, res) => {
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Temple Donation System</title>
-          </head>
-          <body>
-            <div id="root">Loading...</div>
-            <script>
-              window.location.href = '/api/health';
-            </script>
-          </body>
-        </html>
-      `);
-    });
-  }
+  const server = createServer(app);
+  console.log(`${new Date().toLocaleTimeString()} [express] ✓ PostgreSQL Database Connected - Data will be persistent`);
+  console.log(`${new Date().toLocaleTimeString()} [express] ✓ Serving static files from ${distPath}`);
 
   // Use PORT environment variable or default to 5000
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5000;

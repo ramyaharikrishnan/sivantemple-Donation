@@ -1294,27 +1294,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static("public", {
-  maxAge: "1d",
-  // 1 day cache for public files
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, path2) => {
-    if (path2.includes("assets/")) {
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    }
-  }
-}));
-app.use(express.static("dist/public", {
-  maxAge: "1d",
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, path2) => {
-    if (path2.includes("assets/")) {
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    }
-  }
-}));
 app.use(session({
   secret: process.env.SESSION_SECRET || "temple-donation-secret-key-change-in-production",
   resave: true,
@@ -1354,40 +1333,49 @@ app.use((req, res, next) => {
 });
 (async () => {
   registerRoutes(app);
-  const server = createServer(app);
-  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 PostgreSQL Database Connected - Data will be persistent`);
+  const distPath = path.resolve(process.cwd(), "dist/public");
+  app.use(express.static(distPath, {
+    maxAge: "1d",
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, path2) => {
+      if (path2.includes("assets/")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    }
+  }));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.resolve(distPath, "index.html"), (err) => {
+      if (err) {
+        console.error("Error serving index.html:", err);
+        res.status(500).send(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Temple Donation System</title>
+            </head>
+            <body>
+              <div id="root">
+                <div style="text-align: center; padding: 50px;">
+                  <h2>Loading Temple Donation System...</h2>
+                  <p>Please wait while the application loads.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+    });
+  });
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+    console.error("Express error:", err);
     res.status(status).json({ message });
-    console.error(err);
   });
-  const distPath = path.resolve(process.cwd(), "dist/public");
-  try {
-    app.use(express.static(distPath));
-    app.use("*", (_req, res) => {
-      res.sendFile(path.resolve(distPath, "index.html"));
-    });
-    console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 Serving static files from ${distPath}`);
-  } catch (error) {
-    console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u26A0 Static files not found, running in development mode`);
-    app.get("*", (_req, res) => {
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Temple Donation System</title>
-          </head>
-          <body>
-            <div id="root">Loading...</div>
-            <script>
-              window.location.href = '/api/health';
-            </script>
-          </body>
-        </html>
-      `);
-    });
-  }
+  const server = createServer(app);
+  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 PostgreSQL Database Connected - Data will be persistent`);
+  console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] \u2713 Serving static files from ${distPath}`);
   const port = process.env.PORT ? parseInt(process.env.PORT) : 5e3;
   server.listen(port, "0.0.0.0", () => {
     console.log(`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} [express] serving on localhost:${port}`);
