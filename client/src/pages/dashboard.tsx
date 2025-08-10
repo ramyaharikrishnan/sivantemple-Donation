@@ -137,8 +137,24 @@ const Dashboard = memo(function Dashboard() {
     }
   };
 
+  // Enhanced loading state with progress indication
   if (isLoading || !stats) {
-    return <DashboardSkeleton />;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-gray-900">
+            {language === "ta" ? "சேகரிப்பு டாஷ்போர்டு" : "Collection Dashboard"}
+          </h2>
+          <div className="flex items-center space-x-2 text-temple-primary">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-temple-primary"></div>
+            <span className="text-sm font-medium">
+              {language === "ta" ? "தரவு ஏற்றுகிறது..." : "Loading data..."}
+            </span>
+          </div>
+        </div>
+        <DashboardSkeleton />
+      </div>
+    );
   }
 
   if (isError) {
