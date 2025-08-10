@@ -586,11 +586,20 @@ function registerRoutes(app2) {
   });
   app2.get("/api/auth/status", (req, res) => {
     const session2 = req.session;
-    res.setHeader("Cache-Control", "private, max-age=5");
+    console.log("Auth status check:", {
+      sessionID: req.sessionID,
+      sessionData: session2,
+      isAuthenticated: !!session2?.isAuthenticated,
+      username: session2?.username,
+      role: session2?.role
+    });
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.json({
-      isAuthenticated: !!session2.isAuthenticated,
-      username: session2.username || null,
-      role: session2.role || null
+      isAuthenticated: !!session2?.isAuthenticated,
+      username: session2?.username || null,
+      role: session2?.role || null
     });
   });
   app2.post("/api/auth/change-credentials", requireAuth, async (req, res) => {
@@ -1275,14 +1284,37 @@ var app = express();
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => {
-  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$/)) {
-    res.setHeader("Cache-Control", "public, max-age=86400");
+  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|map)$/)) {
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    res.setHeader("ETag", "strong");
   }
-  res.setHeader("X-Powered-By", "MERN-Stack-Express");
+  res.setHeader("X-Powered-By", "Temple-Donation-System");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
   next();
 });
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static("public"));
+app.use(express.static("public", {
+  maxAge: "1d",
+  // 1 day cache for public files
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path2) => {
+    if (path2.includes("assets/")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  }
+}));
+app.use(express.static("dist/public", {
+  maxAge: "1d",
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path2) => {
+    if (path2.includes("assets/")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  }
+}));
 app.use(session({
   secret: process.env.SESSION_SECRET || "temple-donation-secret-key-change-in-production",
   resave: true,

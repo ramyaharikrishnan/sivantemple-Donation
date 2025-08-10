@@ -11,19 +11,47 @@ const app = express();
 app.use(compression()); // Enable gzip compression
 app.use(express.json({ limit: '1mb' })); // Optimize JSON parsing
 
-// Cache static assets for 24 hours for fast loading
+// Optimized static asset caching and headers
 app.use((req, res, next) => {
-  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$/)) {
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+  // Set aggressive caching for static assets
+  if (req.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|map)$/)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+    res.setHeader('ETag', 'strong'); // Enable strong ETags
   }
-  // Enable fast response headers
-  res.setHeader('X-Powered-By', 'MERN-Stack-Express');
+  
+  // Fast response headers for all requests
+  res.setHeader('X-Powered-By', 'Temple-Donation-System');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  
   next();
 });
 app.use(express.urlencoded({ extended: false }));
 
-// Serve PWA static files
-app.use(express.static('public'));
+// Optimized static file serving with performance enhancements  
+app.use(express.static('public', {
+  maxAge: '1d', // 1 day cache for public files
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    // Extra caching for immutable assets
+    if (path.includes('assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
+
+// Serve React app static files with optimized caching
+app.use(express.static('dist/public', {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    if (path.includes('assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
 // Session configuration
 app.use((session as any)({

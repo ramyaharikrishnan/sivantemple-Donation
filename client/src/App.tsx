@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, Suspense, lazy } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -8,14 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Menu, Building2, Languages, Plus, Search, BarChart3, Upload, Link, Settings, LogOut } from "lucide-react";
 import { LanguageProvider, useLanguage, useTranslation } from "@/contexts/LanguageContext";
 
-import DonationForm from "@/pages/donation-form";
-import DonorLookup from "@/pages/donor-lookup";
-import Dashboard from "@/pages/dashboard";
-import ImportData from "@/pages/import-data";
-import AdminPanel from "@/pages/admin-panel";
-import AdminLogin from "@/pages/admin-login";
-import GoogleFormIntegration from "@/pages/google-form-integration";
-import NotFound from "@/pages/not-found";
+// Lazy load components for better performance
+const DonationForm = lazy(() => import("@/pages/donation-form"));
+const DonorLookup = lazy(() => import("@/pages/donor-lookup"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const ImportData = lazy(() => import("@/pages/import-data"));
+const AdminPanel = lazy(() => import("@/pages/admin-panel"));
+const AdminLogin = lazy(() => import("@/pages/admin-login"));
+const GoogleFormIntegration = lazy(() => import("@/pages/google-form-integration"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+// Loading component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-64">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-primary"></div>
+  </div>
+);
 // Removed InstallPrompt - no longer using PWA functionality
 
 
@@ -261,17 +269,19 @@ function ProtectedRoute({ component: Component, ...props }: any) {
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={() => <DonationForm onSuccess={() => {}} />} />
-      <Route path="/donation" component={() => <DonationForm onSuccess={() => {}} />} />
-      <Route path="/lookup" component={DonorLookup} />
-      <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/import" component={() => <ProtectedRoute component={ImportData} />} />
-      <Route path="/admin" component={() => <ProtectedRoute component={AdminPanel} />} />
-      <Route path="/google-form" component={GoogleFormIntegration} />
-      <Route path="/login" component={() => <AdminLogin onLoginSuccess={() => window.location.href = "/admin"} />} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={() => <DonationForm onSuccess={() => {}} />} />
+        <Route path="/donation" component={() => <DonationForm onSuccess={() => {}} />} />
+        <Route path="/lookup" component={DonorLookup} />
+        <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
+        <Route path="/import" component={() => <ProtectedRoute component={ImportData} />} />
+        <Route path="/admin" component={() => <ProtectedRoute component={AdminPanel} />} />
+        <Route path="/google-form" component={GoogleFormIntegration} />
+        <Route path="/login" component={() => <AdminLogin onLoginSuccess={() => window.location.href = "/admin"} />} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

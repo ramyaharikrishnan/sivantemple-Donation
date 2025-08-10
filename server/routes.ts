@@ -100,12 +100,23 @@ export function registerRoutes(app: Express) {
   app.get("/api/auth/status", (req, res) => {
     const session = req.session as any;
     
-    // Fast auth status with caching for better performance
-    res.setHeader('Cache-Control', 'private, max-age=5'); // 5 second cache
+    console.log('Auth status check:', {
+      sessionID: req.sessionID,
+      sessionData: session,
+      isAuthenticated: !!session?.isAuthenticated,
+      username: session?.username,
+      role: session?.role
+    });
+    
+    // Disable cache for auth status to always get fresh data
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     res.json({
-      isAuthenticated: !!session.isAuthenticated,
-      username: session.username || null,
-      role: session.role || null
+      isAuthenticated: !!session?.isAuthenticated,
+      username: session?.username || null,
+      role: session?.role || null
     });
   });
 
