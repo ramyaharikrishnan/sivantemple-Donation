@@ -235,10 +235,13 @@ function ProtectedRoute({ component: Component, ...props }: any) {
   const [location, setLocation] = useLocation();
   const { data: authStatus, isLoading, error } = useQuery<AuthStatus>({
     queryKey: ["/api/auth/status"],
-    retry: 3,
-    staleTime: 30 * 1000, // 30 seconds fresh
+    retry: 1, // Single retry only
+    staleTime: 60 * 1000, // 60 seconds fresh - longer cache
+    gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
     refetchOnWindowFocus: false,
     refetchInterval: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false, // Don't refetch on mount
   });
 
   // Handle loading state
