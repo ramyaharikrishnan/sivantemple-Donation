@@ -233,33 +233,35 @@ function Navigation() {
 // Protected Route Component
 function ProtectedRoute({ component: Component, ...props }: any) {
   const [location, setLocation] = useLocation();
-  const { data: authStatus, isLoading } = useQuery<AuthStatus>({
+  const { data: authStatus, isLoading, error } = useQuery<AuthStatus>({
     queryKey: ["/api/auth/status"],
-    retry: false,
-    staleTime: 0, // Always fresh
-    refetchOnWindowFocus: true,
-    refetchInterval: 5000, // Check every 5 seconds
+    retry: 3,
+    staleTime: 30 * 1000, // 30 seconds fresh
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
+  // Handle loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-primary mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <p className="mt-2 text-gray-600">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  if (!authStatus?.isAuthenticated) {
+  // Handle error or not authenticated
+  if (error || !authStatus?.isAuthenticated) {
     return <AdminLogin onLoginSuccess={async () => {
       // Invalidate auth query and wait for it to refetch
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/status"] });
       // Small delay to ensure auth status is updated
       setTimeout(() => {
-        // Stay in admin panel after login instead of redirecting to dashboard
-        setLocation("/admin");
+        // Redirect to the current location after login
+        window.location.reload();
       }, 100);
     }} />;
   }
