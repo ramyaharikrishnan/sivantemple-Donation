@@ -46,7 +46,16 @@ interface Donation {
   donationDate?: Date | string | null;
   createdAt: Date | string;
 }
+function useDebounce<T>(value: T, delay = 500) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState("");
@@ -61,12 +70,39 @@ export default function AdminPanel() {
   const { toast } = useToast();
   const [filters, setFilters] = useState({
     dateRange: "all",
-    community: "any",
     paymentMode: "all",
-    amountRange: "all",
+    phone: "",
+    receiptNo: "",
     startDate: "",
     endDate: "",
   });
+  const debouncedPhone = useDebounce(filters.phone, 500);
+const debouncedReceiptNo = useDebounce(filters.receiptNo, 500);
+
+const debouncedFilters = useMemo(() => ({
+  ...filters,
+  phone: debouncedPhone,
+  receiptNo: debouncedReceiptNo,
+}), [filters, debouncedPhone, debouncedReceiptNo]);
+
+const queryFilters = useMemo(() => ({
+  dateRange: filters.dateRange,
+  paymentMode: filters.paymentMode,
+  startDate: filters.startDate,
+  endDate: filters.endDate,
+
+  // ✅ ONLY debounced values go to API
+  phone: debouncedPhone,
+  receiptNo: debouncedReceiptNo,
+}), [
+  filters.dateRange,
+  filters.paymentMode,
+  filters.startDate,
+  filters.endDate,
+  debouncedPhone,
+  debouncedReceiptNo,
+]);
+
 
   // Check authentication status on component mount (optimized for speed)
   useEffect(() => {
@@ -130,27 +166,29 @@ export default function AdminPanel() {
   };
 
   const { data: donations = [], isLoading } = useQuery<Donation[]>({
-    queryKey: ["/api/donations", filters],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== "all" && value !== "any") {
-          params.append(key, value);
-        }
-      });
+  queryKey: ["/api/donations", queryFilters],
+  queryFn: async () => {
+    const params = new URLSearchParams();
 
-      const response = await fetch(`/api/donations?${params}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch donations");
+    Object.entries(queryFilters).forEach(([key, value]) => {
+      if (value && value !== "all") {
+        params.append(key, value);
       }
+    });
 
-      return response.json();
-    },
-    enabled: isAuthenticated === true, // Only run query when authenticated
-  });
+    const response = await fetch(`/api/donations?${params}`, {
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch donations");
+    }
+
+    return response.json();
+  },
+  enabled: isAuthenticated === true,
+});
+
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -387,6 +425,7 @@ export default function AdminPanel() {
             {language === "en" ? "Filters" : "வடிகட்டிகள்"}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date Range
@@ -444,32 +483,7 @@ export default function AdminPanel() {
                 </div>
               </>
             )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kulam
-              </label>
-              <Select
-                value={filters.community}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, community: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Kulam" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">
-                    {language === "en" ? "Any" : "எதையும்"}
-                  </SelectItem>
-                  <SelectItem value="payiran">{t("payiran")}</SelectItem>
-                  <SelectItem value="semban">{t("semban")}</SelectItem>
-                  <SelectItem value="othaalan">{t("othaalan")}</SelectItem>
-                  <SelectItem value="aavan">{t("aavan")}</SelectItem>
-                  <SelectItem value="aadai">{t("aadai")}</SelectItem>
-                  <SelectItem value="vizhiyan">{t("vizhiyan")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Payment Mode
@@ -493,28 +507,39 @@ export default function AdminPanel() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount Range
-              </label>
-              <Select
-                value={filters.amountRange}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, amountRange: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Amounts</SelectItem>
-                  <SelectItem value="0-1000">₹0 - ₹1,000</SelectItem>
-                  <SelectItem value="1001-5000">₹1,001 - ₹5,000</SelectItem>
-                  <SelectItem value="5001-10000">₹5,001 - ₹10,000</SelectItem>
-                  <SelectItem value="10000+">₹10,000+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+<div>
+  <Label className="block text-sm font-medium text-gray-700 mb-1">
+    Phone Number
+  </Label>
+  <Input
+    type="tel"
+    placeholder="Enter 10-digit phone"
+    maxLength={10}
+    value={filters.phone}
+    onChange={(e) => {
+      const value = e.target.value.replace(/\D/g, ""); // digits only
+      if (value.length <= 10) {
+        setFilters((prev) => ({ ...prev, phone: value }));
+      }
+    }}
+    className="h-10"
+  />
+</div>
+<div>
+  <Label className="block text-sm font-medium text-gray-700 mb-1">
+    Receipt No
+  </Label>
+  <Input
+    type="text"
+    placeholder="Enter receipt number"
+    value={filters.receiptNo}
+    onChange={(e) =>
+      setFilters((prev) => ({ ...prev, receiptNo: e.target.value.trim() }))
+    }
+    className="h-10"
+  />
+</div>
+
           </div>
         </CardContent>
       </Card>

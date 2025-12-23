@@ -102,7 +102,7 @@ taskkill /PID <PID> /F
 lsof -ti:5000 | xargs kill -9
 
 # Or change port in .env:
-PORT=3000
+PORT=5000
 ```
 
 ## Error 6: TypeScript Compilation Errors
@@ -292,7 +292,7 @@ node server/index-simple.js
 # Or create basic server:
 const express = require('express');
 const app = express();
-app.listen(3000, () => console.log('Server running on 3000'));
+app.listen(5000, () => console.log('Server running on 5000'));
 ```
 
 #### Option 2: Use Replit Development

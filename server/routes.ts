@@ -400,17 +400,21 @@ export function registerRoutes(app: Express) {
     try {
       const filters = {
         dateRange: req.query.dateRange as string,
-        community: req.query.community as string,
         paymentMode: req.query.paymentMode as string,
-        amountRange: req.query.amountRange as string,
         startDate: req.query.startDate as string,
         endDate: req.query.endDate as string,
+        phone: req.query.phone as string,
+  receiptNo: req.query.receiptNo as string,
       };
 
       // Check if any filters are applied
-      const hasFilters = Object.values(filters).some(filter => 
-        filter && filter !== 'all' && filter !== 'any'
-      );
+      const hasFilters =
+  !!filters.phone ||
+  !!filters.receiptNo ||
+  !!filters.paymentMode ||
+  !!filters.dateRange ||
+  (!!filters.startDate && !!filters.endDate);
+
 
       let donations;
       if (hasFilters) {
@@ -726,9 +730,10 @@ export function registerRoutes(app: Express) {
           dateRange: dateRange,
           startDate: startDateParam,
           endDate: endDateParam,
-          community: 'all',
+          phone:"",
+          receiptNo:"",
           paymentMode: 'all',
-          amountRange: 'all'
+          
         };
         donations = await storage.getDonationsByFilters(filters);
       } else {

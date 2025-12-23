@@ -69,7 +69,7 @@ npx drizzle-kit push
 ```cmd
 # Kill existing process
 taskkill /F /IM node.exe
-# Or change PORT in .env to 3000
+# Or change PORT in .env to 5000
 ```
 
 ### Static Files Not Loading:

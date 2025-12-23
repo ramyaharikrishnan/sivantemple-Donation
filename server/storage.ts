@@ -12,32 +12,32 @@ export interface IStorage {
   getDonationsByReceiptNo(receiptNo: string): Promise<Donation | undefined>;
   getDonationsByFilters(filters: {
     dateRange?: string;
-    community?: string;
     paymentMode?: string;
-    amountRange?: string;
     startDate?: string;
     endDate?: string;
+    phone?: string;
+    receiptNo?: string;
   }): Promise<Donation[]>;
   deleteDonation(id: number): Promise<boolean>;
   deleteAllDonations(): Promise<void>;
-  
+
   // Receipt sequences
   getNextReceiptNumber(year: number): Promise<string>;
   getCurrentReceiptSequence(year: number): Promise<ReceiptSequence | undefined>;
-  
+
   // Analytics
   getTotalDonations(): Promise<number>;
   getTotalAmount(): Promise<number>;
   getUniqueDonorCount(): Promise<number>;
-  getPaymentModeDistribution(): Promise<Array<{ paymentMode: string; count: number; amount: number }>>;
-  getRecentDonations(limit: number): Promise<Donation[]>;
+  getPaymentModeDistribution(startDate?: Date, endDate?: Date): Promise<Array<{ paymentMode: string; count: number; amount: number }>>;
+  getRecentDonations(limit: number, startDate?: Date, endDate?: Date): Promise<Donation[]>;
   getDashboardStats(startDate?: Date, endDate?: Date): Promise<{
     totalCollection: number;
     totalDonors: number;
     totalDonations: number;
     averageDonation: number;
   }>;
-  
+
   // Donor search
   searchDonors(query: string, community?: string): Promise<DonorSummary[]>;
   getDonorByPhone(phone: string): Promise<DonorSummary | undefined>;
@@ -100,24 +100,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextReceiptNumber(year: number): Promise<string> {
-    let sequence = await this.getCurrentReceiptSequence(year);
-    
+  return await db.transaction(async (tx) => {
+    // Try to get the sequence
+    const [sequence] = await tx.select().from(receiptSequences).where(eq(receiptSequences.year, year));
+
+    let nextNumber: number;
+
     if (!sequence) {
-      // Create new sequence for the year
-      const [newSequence] = await db.insert(receiptSequences)
+      // Create new sequence
+      const [newSeq] = await tx.insert(receiptSequences)
         .values({ year, lastReceiptNumber: 1 })
         .returning();
-      return "1";
+      nextNumber = 1;
+    } else {
+      // Increment and update atomically
+      const [updated] = await tx.update(receiptSequences)
+        .set({ lastReceiptNumber: sequence.lastReceiptNumber + 1 })
+        .where(eq(receiptSequences.year, year))
+        .returning();
+      nextNumber = updated.lastReceiptNumber;
     }
 
-    // Increment and update
-    const nextNumber = sequence.lastReceiptNumber + 1;
-    await db.update(receiptSequences)
-      .set({ lastReceiptNumber: nextNumber })
-      .where(eq(receiptSequences.year, year));
-
-    return nextNumber.toString();
-  }
+    return nextNumber.toString().padStart(4, "0");
+  });
+}
 
   async getCurrentReceiptSequence(year: number): Promise<ReceiptSequence | undefined> {
     const [result] = await db.select().from(receiptSequences).where(eq(receiptSequences.year, year));
@@ -130,16 +136,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTotalAmount(): Promise<number> {
-    const [result] = await db.select({ 
-      total: sum(donations.amount)
-    }).from(donations);
+    const [result] = await db.select({ total: sum(donations.amount) }).from(donations);
     return Number(result.total) || 0;
   }
 
   async getUniqueDonorCount(): Promise<number> {
-    const [result] = await db.select({ 
-      count: sql<number>`COUNT(DISTINCT ${donations.phone})`
-    }).from(donations);
+    const [result] = await db.select({ count: sql<number>`COUNT(DISTINCT ${donations.phone})` }).from(donations);
     return result.count;
   }
 
@@ -148,8 +150,7 @@ export class DatabaseStorage implements IStorage {
       paymentMode: donations.paymentMode,
       count: count(),
       amount: sum(donations.amount)
-    })
-    .from(donations);
+    }).from(donations);
 
     if (startDate && endDate) {
       query = query.where(and(
@@ -159,7 +160,6 @@ export class DatabaseStorage implements IStorage {
     }
 
     const results = await query.groupBy(donations.paymentMode);
-
     return results.map(r => ({
       paymentMode: r.paymentMode,
       count: r.count,
@@ -168,9 +168,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRecentDonations(limit: number = 10, startDate?: Date, endDate?: Date): Promise<Donation[]> {
-    // Get all donations first, then sort properly
     let query = db.select().from(donations);
-
     if (startDate && endDate) {
       query = query.where(and(
         gte(donations.donationDate, startDate),
@@ -178,51 +176,32 @@ export class DatabaseStorage implements IStorage {
       )) as any;
     }
 
-    const allResults = await query;
-    
-    // Sort properly: donations with dates first (by donation date desc), then null dates (by created_at desc)
-    const sorted = allResults.sort((a, b) => {
-      // If both have donation dates, sort by donation date desc
-      if (a.donationDate && b.donationDate) {
-        return new Date(b.donationDate).getTime() - new Date(a.donationDate).getTime();
-      }
-      // If only a has donation date, a comes first
-      if (a.donationDate && !b.donationDate) {
-        return -1;
-      }
-      // If only b has donation date, b comes first
-      if (!a.donationDate && b.donationDate) {
-        return 1;
-      }
-      // If both are null, sort by created_at desc
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }).slice(0, limit);
-    
-    return sorted;
+    return await query
+      .orderBy(desc(donations.donationDate))
+      .limit(limit);
   }
 
   async getDonationsByFilters(filters: {
     dateRange?: string;
-    community?: string;
     paymentMode?: string;
-    amountRange?: string;
     startDate?: string;
     endDate?: string;
+    phone?: string;
+    receiptNo?: string;
   }): Promise<Donation[]> {
-    let conditions: any[] = [];
+    const conditions: any[] = [];
 
-    // Date range filter
+    // Date filters
     if (filters.dateRange && filters.dateRange !== 'all') {
       const now = new Date();
       let startDate: Date;
-      let endDate: Date | undefined;
+      let endDate: Date;
 
       switch (filters.dateRange) {
         case 'today':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          conditions.push(gte(donations.donationDate, startDate));
-          conditions.push(lte(donations.donationDate, endDate));
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          conditions.push(gte(donations.donationDate, startDate), lte(donations.donationDate, endDate));
           break;
         case 'week':
           startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -239,63 +218,37 @@ export class DatabaseStorage implements IStorage {
           }
           if (filters.endDate) {
             endDate = new Date(filters.endDate);
-            endDate.setHours(23, 59, 59, 999); // End of day
+            endDate.setHours(23, 59, 59, 999);
             conditions.push(lte(donations.donationDate, endDate));
           }
           break;
       }
     }
 
-    // Community filter
-    if (filters.community && filters.community !== 'any' && filters.community !== 'all') {
-      conditions.push(eq(donations.community, filters.community));
-    }
-
-    // Payment mode filter
+    // Payment mode
     if (filters.paymentMode && filters.paymentMode !== 'all') {
-      // Handle both frontend values and database values
-      let paymentModeValue = filters.paymentMode;
-      if (filters.paymentMode === 'bankTransfer') {
-        paymentModeValue = 'bank_transfer';
-      } else if (filters.paymentMode === 'bank-transfer') {
-        paymentModeValue = 'bank_transfer';
-      }
-      conditions.push(eq(donations.paymentMode, paymentModeValue));
+      let pm = filters.paymentMode;
+      if (pm === 'bankTransfer' || pm === 'bank-transfer') pm = 'bank_transfer';
+      conditions.push(eq(donations.paymentMode, pm));
     }
 
-    // Amount range filter
-    if (filters.amountRange && filters.amountRange !== 'all') {
-      const parseAmountRange = (range: string): [number?, number?] => {
-        if (range === '0-1000') return [0, 1000];
-        if (range === '1001-5000') return [1001, 5000];
-        if (range === '5001-10000') return [5001, 10000];
-        if (range === '10000+') return [10000, undefined];
-        return [undefined, undefined];
-      };
+    // Phone & receipt partial match
+    if (filters.phone) conditions.push(like(donations.phone, `%${filters.phone}%`));
+    if (filters.receiptNo) conditions.push(like(donations.receiptNo, `%${filters.receiptNo}%`));
 
-      const [min, max] = parseAmountRange(filters.amountRange);
-      if (min !== undefined) {
-        conditions.push(gte(sql`CAST(${donations.amount} AS DECIMAL)`, min));
-      }
-      if (max !== undefined) {
-        conditions.push(lte(sql`CAST(${donations.amount} AS DECIMAL)`, max));
-      }
-    }
-
-    // Build the query
     if (conditions.length > 0) {
       return await db.select().from(donations)
         .where(and(...conditions))
         .orderBy(desc(donations.donationDate));
-    } else {
-      return await db.select().from(donations)
-        .orderBy(desc(donations.donationDate));
     }
+
+    return await db.select().from(donations)
+      .orderBy(desc(donations.donationDate));
   }
 
   async getDashboardStats(startDate?: Date, endDate?: Date): Promise<{
     totalCollection: number;
-    totalDonors: number; 
+    totalDonors: number;
     totalDonations: number;
     averageDonation: number;
   }> {
@@ -313,59 +266,48 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [result] = await query;
-    
     const totalCollection = Number(result.totalCollection) || 0;
     const totalDonations = result.totalDonations;
     const totalDonors = result.uniqueDonors;
     const averageDonation = totalDonations > 0 ? totalCollection / totalDonations : 0;
 
-    return {
-      totalCollection,
-      totalDonors,
-      totalDonations,
-      averageDonation
-    };
+    return { totalCollection, totalDonors, totalDonations, averageDonation };
   }
 
   async searchDonors(query: string, community?: string): Promise<DonorSummary[]> {
-    let conditions: any[] = [];
-
-    // Search by name or phone
-    conditions.push(
-      or(
-        like(donations.name, `%${query}%`),
-        like(donations.phone, `%${query}%`)
-      )
-    );
-
-    // Filter by community if specified
-    if (community && community !== 'all') {
-      conditions.push(eq(donations.community, community));
-    }
+    const conditions: any[] = [or(
+      like(donations.name, `%${query}%`),
+      like(donations.phone, `%${query}%`)
+    )];
+    if (community && community !== 'all') conditions.push(eq(donations.community, community));
 
     const allDonations = await db.select().from(donations)
       .where(and(...conditions))
       .orderBy(desc(donations.donationDate));
 
-    // Group by phone number to get unique donors
     const donorMap = new Map<string, DonorSummary>();
 
-    for (const donation of allDonations) {
-      if (!donorMap.has(donation.phone)) {
-        const donorDonations = allDonations.filter(d => d.phone === donation.phone);
-        const totalAmount = donorDonations.reduce((sum, d) => sum + Number(d.amount), 0);
+    // Group donations by phone
+    const grouped: Record<string, Donation[]> = {};
+    for (const d of allDonations) {
+      grouped[d.phone] = grouped[d.phone] || [];
+      grouped[d.phone].push(d);
+    }
 
-        donorMap.set(donation.phone, {
-          name: donation.name,
-          phone: donation.phone,
-          location: donation.location || '',
-          community: donation.community || '',
-          totalAmount,
-          donationCount: donorDonations.length,
-          lastDonation: (donation.donationDate || donation.createdAt).toISOString(),
-          donations: donorDonations
-        });
-      }
+    for (const [phone, donationsList] of Object.entries(grouped)) {
+      const lastDonation = donationsList[0];
+      const totalAmount = donationsList.reduce((sum, d) => sum + Number(d.amount), 0);
+
+      donorMap.set(phone, {
+        name: lastDonation.name,
+        phone,
+        location: lastDonation.location || '',
+        community: lastDonation.community || '',
+        totalAmount,
+        donationCount: donationsList.length,
+        lastDonation: (lastDonation.donationDate || lastDonation.createdAt).toISOString(),
+        donations: donationsList
+      });
     }
 
     return Array.from(donorMap.values());
@@ -376,9 +318,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(donations.phone, phone))
       .orderBy(desc(donations.donationDate));
 
-    if (donorDonations.length === 0) {
-      return undefined;
-    }
+    if (!donorDonations.length) return undefined;
 
     const firstDonation = donorDonations[0];
     const totalAmount = donorDonations.reduce((sum, d) => sum + Number(d.amount), 0);

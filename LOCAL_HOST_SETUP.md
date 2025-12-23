@@ -159,7 +159,7 @@ temple-donation-system/
 Error: EADDRINUSE: address already in use :::5000
 Solution: 
 - Close other applications using port 5000
-- Or change PORT in .env file to 3000 or 8000
+- Or change PORT in .env file to 5000 or 8000
 ```
 
 ### Database Connection Error:

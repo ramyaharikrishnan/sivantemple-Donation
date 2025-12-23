@@ -151,6 +151,7 @@ var init_admin_credentials = __esm({
 });
 
 // server/index.ts
+import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import compression from "compression";
@@ -259,14 +260,18 @@ var DatabaseStorage = class {
     await db.delete(receiptSequences);
   }
   async getNextReceiptNumber(year) {
-    let sequence = await this.getCurrentReceiptSequence(year);
-    if (!sequence) {
-      const [newSequence] = await db.insert(receiptSequences).values({ year, lastReceiptNumber: 1 }).returning();
-      return "1";
-    }
-    const nextNumber = sequence.lastReceiptNumber + 1;
-    await db.update(receiptSequences).set({ lastReceiptNumber: nextNumber }).where(eq(receiptSequences.year, year));
-    return nextNumber.toString();
+    return await db.transaction(async (tx) => {
+      const [sequence] = await tx.select().from(receiptSequences).where(eq(receiptSequences.year, year));
+      let nextNumber;
+      if (!sequence) {
+        const [newSeq] = await tx.insert(receiptSequences).values({ year, lastReceiptNumber: 1 }).returning();
+        nextNumber = 1;
+      } else {
+        const [updated] = await tx.update(receiptSequences).set({ lastReceiptNumber: sequence.lastReceiptNumber + 1 }).where(eq(receiptSequences.year, year)).returning();
+        nextNumber = updated.lastReceiptNumber;
+      }
+      return nextNumber.toString().padStart(4, "0");
+    });
   }
   async getCurrentReceiptSequence(year) {
     const [result] = await db.select().from(receiptSequences).where(eq(receiptSequences.year, year));
@@ -277,15 +282,11 @@ var DatabaseStorage = class {
     return result.count;
   }
   async getTotalAmount() {
-    const [result] = await db.select({
-      total: sum(donations.amount)
-    }).from(donations);
+    const [result] = await db.select({ total: sum(donations.amount) }).from(donations);
     return Number(result.total) || 0;
   }
   async getUniqueDonorCount() {
-    const [result] = await db.select({
-      count: sql`COUNT(DISTINCT ${donations.phone})`
-    }).from(donations);
+    const [result] = await db.select({ count: sql`COUNT(DISTINCT ${donations.phone})` }).from(donations);
     return result.count;
   }
   async getPaymentModeDistribution(startDate, endDate) {
@@ -315,23 +316,10 @@ var DatabaseStorage = class {
         lte(donations.donationDate, endDate)
       ));
     }
-    const allResults = await query;
-    const sorted = allResults.sort((a, b) => {
-      if (a.donationDate && b.donationDate) {
-        return new Date(b.donationDate).getTime() - new Date(a.donationDate).getTime();
-      }
-      if (a.donationDate && !b.donationDate) {
-        return -1;
-      }
-      if (!a.donationDate && b.donationDate) {
-        return 1;
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }).slice(0, limit);
-    return sorted;
+    return await query.orderBy(desc(donations.donationDate)).limit(limit);
   }
   async getDonationsByFilters(filters) {
-    let conditions = [];
+    const conditions = [];
     if (filters.dateRange && filters.dateRange !== "all") {
       const now = /* @__PURE__ */ new Date();
       let startDate;
@@ -339,9 +327,8 @@ var DatabaseStorage = class {
       switch (filters.dateRange) {
         case "today":
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          conditions.push(gte(donations.donationDate, startDate));
-          conditions.push(lte(donations.donationDate, endDate));
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          conditions.push(gte(donations.donationDate, startDate), lte(donations.donationDate, endDate));
           break;
         case "week":
           startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
@@ -364,39 +351,17 @@ var DatabaseStorage = class {
           break;
       }
     }
-    if (filters.community && filters.community !== "any" && filters.community !== "all") {
-      conditions.push(eq(donations.community, filters.community));
-    }
     if (filters.paymentMode && filters.paymentMode !== "all") {
-      let paymentModeValue = filters.paymentMode;
-      if (filters.paymentMode === "bankTransfer") {
-        paymentModeValue = "bank_transfer";
-      } else if (filters.paymentMode === "bank-transfer") {
-        paymentModeValue = "bank_transfer";
-      }
-      conditions.push(eq(donations.paymentMode, paymentModeValue));
+      let pm = filters.paymentMode;
+      if (pm === "bankTransfer" || pm === "bank-transfer") pm = "bank_transfer";
+      conditions.push(eq(donations.paymentMode, pm));
     }
-    if (filters.amountRange && filters.amountRange !== "all") {
-      const parseAmountRange = (range) => {
-        if (range === "0-1000") return [0, 1e3];
-        if (range === "1001-5000") return [1001, 5e3];
-        if (range === "5001-10000") return [5001, 1e4];
-        if (range === "10000+") return [1e4, void 0];
-        return [void 0, void 0];
-      };
-      const [min, max] = parseAmountRange(filters.amountRange);
-      if (min !== void 0) {
-        conditions.push(gte(sql`CAST(${donations.amount} AS DECIMAL)`, min));
-      }
-      if (max !== void 0) {
-        conditions.push(lte(sql`CAST(${donations.amount} AS DECIMAL)`, max));
-      }
-    }
+    if (filters.phone) conditions.push(like(donations.phone, `%${filters.phone}%`));
+    if (filters.receiptNo) conditions.push(like(donations.receiptNo, `%${filters.receiptNo}%`));
     if (conditions.length > 0) {
       return await db.select().from(donations).where(and(...conditions)).orderBy(desc(donations.donationDate));
-    } else {
-      return await db.select().from(donations).orderBy(desc(donations.donationDate));
     }
+    return await db.select().from(donations).orderBy(desc(donations.donationDate));
   }
   async getDashboardStats(startDate, endDate) {
     let query = db.select({
@@ -415,49 +380,40 @@ var DatabaseStorage = class {
     const totalDonations = result.totalDonations;
     const totalDonors = result.uniqueDonors;
     const averageDonation = totalDonations > 0 ? totalCollection / totalDonations : 0;
-    return {
-      totalCollection,
-      totalDonors,
-      totalDonations,
-      averageDonation
-    };
+    return { totalCollection, totalDonors, totalDonations, averageDonation };
   }
   async searchDonors(query, community) {
-    let conditions = [];
-    conditions.push(
-      or(
-        like(donations.name, `%${query}%`),
-        like(donations.phone, `%${query}%`)
-      )
-    );
-    if (community && community !== "all") {
-      conditions.push(eq(donations.community, community));
-    }
+    const conditions = [or(
+      like(donations.name, `%${query}%`),
+      like(donations.phone, `%${query}%`)
+    )];
+    if (community && community !== "all") conditions.push(eq(donations.community, community));
     const allDonations = await db.select().from(donations).where(and(...conditions)).orderBy(desc(donations.donationDate));
     const donorMap = /* @__PURE__ */ new Map();
-    for (const donation of allDonations) {
-      if (!donorMap.has(donation.phone)) {
-        const donorDonations = allDonations.filter((d) => d.phone === donation.phone);
-        const totalAmount = donorDonations.reduce((sum2, d) => sum2 + Number(d.amount), 0);
-        donorMap.set(donation.phone, {
-          name: donation.name,
-          phone: donation.phone,
-          location: donation.location || "",
-          community: donation.community || "",
-          totalAmount,
-          donationCount: donorDonations.length,
-          lastDonation: (donation.donationDate || donation.createdAt).toISOString(),
-          donations: donorDonations
-        });
-      }
+    const grouped = {};
+    for (const d of allDonations) {
+      grouped[d.phone] = grouped[d.phone] || [];
+      grouped[d.phone].push(d);
+    }
+    for (const [phone, donationsList] of Object.entries(grouped)) {
+      const lastDonation = donationsList[0];
+      const totalAmount = donationsList.reduce((sum2, d) => sum2 + Number(d.amount), 0);
+      donorMap.set(phone, {
+        name: lastDonation.name,
+        phone,
+        location: lastDonation.location || "",
+        community: lastDonation.community || "",
+        totalAmount,
+        donationCount: donationsList.length,
+        lastDonation: (lastDonation.donationDate || lastDonation.createdAt).toISOString(),
+        donations: donationsList
+      });
     }
     return Array.from(donorMap.values());
   }
   async getDonorByPhone(phone) {
     const donorDonations = await db.select().from(donations).where(eq(donations.phone, phone)).orderBy(desc(donations.donationDate));
-    if (donorDonations.length === 0) {
-      return void 0;
-    }
+    if (!donorDonations.length) return void 0;
     const firstDonation = donorDonations[0];
     const totalAmount = donorDonations.reduce((sum2, d) => sum2 + Number(d.amount), 0);
     return {
@@ -815,15 +771,13 @@ function registerRoutes(app2) {
     try {
       const filters = {
         dateRange: req.query.dateRange,
-        community: req.query.community,
         paymentMode: req.query.paymentMode,
-        amountRange: req.query.amountRange,
         startDate: req.query.startDate,
-        endDate: req.query.endDate
+        endDate: req.query.endDate,
+        phone: req.query.phone,
+        receiptNo: req.query.receiptNo
       };
-      const hasFilters = Object.values(filters).some(
-        (filter) => filter && filter !== "all" && filter !== "any"
-      );
+      const hasFilters = !!filters.phone || !!filters.receiptNo || !!filters.paymentMode || !!filters.dateRange || !!filters.startDate && !!filters.endDate;
       let donations2;
       if (hasFilters) {
         donations2 = await storage.getDonationsByFilters(filters);
@@ -1073,9 +1027,9 @@ function registerRoutes(app2) {
           dateRange,
           startDate: startDateParam,
           endDate: endDateParam,
-          community: "all",
-          paymentMode: "all",
-          amountRange: "all"
+          phone: "",
+          receiptNo: "",
+          paymentMode: "all"
         };
         donations2 = await storage.getDonationsByFilters(filters);
       } else {
