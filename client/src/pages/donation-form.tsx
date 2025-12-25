@@ -29,6 +29,12 @@ import { formatCurrencyTamil } from "@/lib/i18n";
 import { Plus, CheckCircle } from "lucide-react";
 import type { Donation, InsertDonation } from "@/../../shared/schema";
 
+/* 🔽 ADD THIS RIGHT HERE (TOP LEVEL) */
+type DonationFormValues = Omit<InsertDonation, "donationDate"> & {
+  donationDate: string;
+};
+
+
 export default function DonationForm({
   initialData,
   onSuccess,
@@ -46,35 +52,35 @@ export default function DonationForm({
 
   const isEditMode = !!initialData;
 
-  const form = useForm({
-    defaultValues: initialData
-      ? {
-          receiptNo: initialData.receiptNo,
-          name: initialData.name,
-          phone: initialData.phone,
-          community: (initialData.community as any) || undefined,
-          location: initialData.location || "",
-          address: initialData.address || "",
-          amount: initialData.amount,
-          paymentMode: initialData.paymentMode as any,
-          inscription: initialData.inscription,
-          donationDate: initialData.donationDate
-            ? new Date(initialData.donationDate).toISOString().split("T")[0]
-            : undefined,
-        }
-      : {
-          receiptNo: "",
-          name: "",
-          phone: "",
-          community: undefined,
-          location: "",
-          address: "",
-          amount: undefined,
-          paymentMode: "cash",
-          inscription: false,
-          donationDate: "",
-        },
-  });
+  const form = useForm<DonationFormValues>({
+     defaultValues: initialData
+    ? {
+        receiptNo: initialData.receiptNo,
+        name: initialData.name,
+        phone: initialData.phone,
+        community: initialData.community ?? undefined,
+        location: initialData.location ?? "",
+        address: initialData.address ?? "",
+        amount: initialData.amount,
+        paymentMode: initialData.paymentMode,
+        inscription: initialData.inscription,
+        donationDate: initialData.donationDate
+          ? new Date(initialData.donationDate).toISOString().split("T")[0]
+          : "", // ✅ STRING ONLY
+      }
+       : {
+        receiptNo: "",
+        name: "",
+        phone: "",
+        community: undefined,
+        location: "",
+        address: "",
+        amount: undefined,
+        paymentMode: "cash",
+        inscription: false,
+        donationDate: "", // ✅ STRING
+      },
+});
 
   const createDonationMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -252,39 +258,34 @@ export default function DonationForm({
     }
   };
 
-  const checkExistingDonor = async (phone: string) => {
-    if (phone.length >= 10) {
-      try {
-        const response = await fetch(`/api/donors/${phone}`, {
-          credentials: "include",
-        });
-        
-        if (response.status === 401) {
-          // Authentication required - continue without pre-filling
-          setDonorHistory(null);
-          return;
-        }
-        
-        if (response.ok) {
-          const donor = await response.json();
-          setDonorHistory(donor);
-          // Pre-fill form with existing donor data
-          form.setValue("name", donor.name);
-          form.setValue("location", donor.location || "");
-          form.setValue("community", donor.community || "");
-        } else {
-          setDonorHistory(null);
-        }
-      } catch (error) {
+const checkExistingDonor = async (phone: string) => {
+  if (phone.length >= 10) {
+    try {
+      const response = await fetch(`/api/donors/${phone}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
         setDonorHistory(null);
+        return;
       }
-    } else {
+
+      const donor = await response.json();
+      setDonorHistory(donor);
+
+      form.setValue("name", donor.name ?? "");
+      form.setValue("location", donor.location ?? "");
+      form.setValue("community", donor.community ?? undefined);
+    } catch {
       setDonorHistory(null);
     }
-  };
+  } else {
+    setDonorHistory(null);
+  }
+};
 
-  const onSubmit = (data: any) => {
-    // Check if there's a receipt error before submitting
+
+const onSubmit = (data: DonationFormValues) => {
     if (receiptError) {
       toast({
         title: language === "en" ? "❌ Error" : "❌ பிழை",
@@ -333,13 +334,11 @@ export default function DonationForm({
     }
     
     // Process and clean the donation data
-    const donationData = {
-      ...data,
-      // Convert amount to number for validation
-      amount: Number(data.amount) || 0,
-      // Convert donation date string to Date object if provided  
-      donationDate: data.donationDate ? new Date(data.donationDate) : undefined,
-    };
+const donationData: InsertDonation = {
+  ...data,
+  amount: Number(data.amount),
+  donationDate: new Date(data.donationDate), // ✅ ALWAYS Date
+};
     createDonationMutation.mutate(donationData);
   };
 
@@ -490,11 +489,13 @@ export default function DonationForm({
                 {t("community")} <span className="text-red-500">*</span>
               </Label>
               <Select
-                value={form.watch("community") || ""}
-                onValueChange={(value) => {
-                  form.setValue("community", value as any);
-                  form.clearErrors("community");
-                }}
+                value={form.watch("community")}
+               onValueChange={(value) => {
+  form.setValue("community", value as InsertDonation["community"], {
+    shouldValidate: true,
+  });
+}}
+
               >
                 <SelectTrigger className="text-sm sm:text-base h-11 sm:h-12">
                   <SelectValue
@@ -724,7 +725,7 @@ export default function DonationForm({
                     amount: undefined,
                     paymentMode: "cash",
                     inscription: false,
-                    donationDate: undefined,
+                    donationDate: "",
                   });
                   setDonorHistory(null);
                   setReceiptError("");
