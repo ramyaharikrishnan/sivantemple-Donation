@@ -84,47 +84,50 @@ export default function DonationForm({
 });
 
   const createDonationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const payload = {
-    ...data,
-    donationDate: new Date(data.donationDate), // 🔥 FINAL SAFETY
-  };
-      if (isEditMode && initialData) {
-        // Update existing donation
-        const donationId = (initialData as any)._id || (initialData as any).id;
-        const response = await fetch(`/api/donations/${donationId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-          throw new Error("Failed to update donation");
-        }
-        return response.json();
-      } else {
-        // Create new donation
-        const response = await fetch("/api/donations", {
+  mutationFn: async (data: any) => {
+    const payload = {
+      ...data,
+      donationDate: new Date(data.donationDate),
+    };
+
+    if (isEditMode && initialData) {
+      const donationId =
+        (initialData as any)._id || (initialData as any).id;
+
+      const response = await fetch(`/api/donations/${donationId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to update donation");
+      }
+
+      // ✅ SAFE: handle empty or non-JSON response
+      const text = await response.text();
+      return text ? JSON.parse(text) : payload;
+    }
+
+    // CREATE MODE (no change needed)
+    const response = await fetch("/api/donations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(payload), // 👈 use payload
-        });
-      
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          if (response.status === 401) {
-            throw new Error("Authentication required. Please login to admin panel first.");
-          }
-          throw new Error(errorData.message || "Failed to create donation");
-        }
-        
-        return response.json();
-      }
-    },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to create donation");
+    }
+
+    return response.json();
+  },
     onSuccess: (result) => {
       if (isEditMode) {
         // For edit mode, call onSuccess callback if provided
@@ -442,7 +445,12 @@ const donationData: InsertDonation = {
                     message: language === "en" ? "Phone number must be exactly 10 digits" : "தொலைபேசி எண் சரியாக 10 இலக்கங்களாக இருக்க வேண்டும்"
                   }
                 })}
-                onBlur={(e) => checkExistingDonor(e.target.value)}
+                onBlur={(e) => {
+  if (!isEditMode) {
+    checkExistingDonor(e.target.value);
+  }
+}}
+
                 onChange={(e) => {
                   // Only allow digits and limit to 10 characters
                   const value = e.target.value.replace(/\D/g, '').slice(0, 10);
