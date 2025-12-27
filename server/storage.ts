@@ -5,6 +5,7 @@ import { eq, desc, gte, lte, and, sql, count, sum, or, like } from "drizzle-orm"
 export interface IStorage {
   // Donations
   createDonation(donation: InsertDonation): Promise<Donation>;
+  updateDonation(id: number, donation: Partial<InsertDonation>): Promise<Donation | undefined>; // ⭐ NEW
   getAllDonations(): Promise<Donation[]>;
   getDonationById(id: number): Promise<Donation | undefined>;
   getDonationsByPhone(phone: string): Promise<Donation[]>;
@@ -58,6 +59,19 @@ export class DatabaseStorage implements IStorage {
   async createDonation(donation: InsertDonation): Promise<Donation> {
     const [result] = await db.insert(donations).values(donation).returning();
     return result;
+  }
+  // ✅ REQUIRED FIX
+  async updateDonation(
+    id: number,
+    donation: Partial<InsertDonation>
+  ): Promise<Donation | undefined> {
+    const [updated] = await db
+      .update(donations)
+      .set(donation) // ❌ NO updatedAt here
+      .where(eq(donations.id, id))
+      .returning();
+
+    return updated;
   }
 
   async getAllDonations(): Promise<Donation[]> {

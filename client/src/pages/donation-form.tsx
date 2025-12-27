@@ -127,38 +127,38 @@ export default function DonationForm({
     return response.json();
   },
     onSuccess: (result) => {
-      if (isEditMode) {
-        // For edit mode, call onSuccess callback if provided
-        if (onSuccess) {
-          onSuccess();
-        }
-        toast({
-          title: "Success",
-          description: "Donation updated successfully",
-        });
-      } else {
-        // For create mode, show success dialog and toast
-        setSuccessData({
-          receiptNo: result.receiptNo,
-          amount: result.amount,
-          name: result.name,
-          community: result.community,
-          paymentMode: result.paymentMode,
-        });
-        setShowSuccessDialog(true);
+  // 🔥 FORCE ADMIN PANEL TO REFRESH
+  queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
 
-        // Show success toast immediately
-        toast({
-          title:
-            language === "en"
-              ? "✅ Donation Added Successfully!"
-              : "✅ நன்கொடை வெற்றிகரமாக சேர்க்கப்பட்டது!",
-          description:
-            language === "en"
-              ? `Receipt No: ${result.receiptNo} | Amount: ₹${result.amount}`
-              : `ரசீது எண்: ${result.receiptNo} | தொகை: ₹${result.amount}`,
-          duration: 5000,
-        });
+  if (isEditMode) {
+    onSuccess?.();
+
+    toast({
+      title: "Success",
+      description: "Donation updated successfully",
+    });
+  } else {
+    setSuccessData({
+      receiptNo: result.receiptNo,
+      amount: result.amount,
+      name: result.name,
+      community: result.community,
+      paymentMode: result.paymentMode,
+    });
+
+    setShowSuccessDialog(true);
+
+    toast({
+      title:
+        language === "en"
+          ? "✅ Donation Added Successfully!"
+          : "✅ நன்கொடை வெற்றிகரமாக சேர்க்கப்பட்டது!",
+      description:
+        language === "en"
+          ? `Receipt No: ${result.receiptNo} | Amount: ₹${result.amount}`
+          : `ரசீது எண்: ${result.receiptNo} | தொகை: ₹${result.amount}`,
+      duration: 5000,
+    });
 
         // Reset form and state
         form.reset({

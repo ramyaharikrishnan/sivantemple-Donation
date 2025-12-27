@@ -521,6 +521,44 @@ export function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to fetch donation" });
     }
   });
+// Update donation (protected)
+app.put("/api/donations/:id", requireAuth, async (req, res) => {
+  try {
+    const donationId = parseInt(req.params.id);
+
+    if (!donationId || isNaN(donationId)) {
+      return res.status(400).json({ message: "Invalid donation ID" });
+    }
+
+    // Validate incoming data
+    const validatedData = insertDonationSchema.partial().parse(req.body);
+
+    const updatedDonation = await storage.updateDonation(
+      donationId,
+      validatedData
+    );
+
+    if (!updatedDonation) {
+      return res.status(404).json({ message: "Donation not found" });
+    }
+
+    // Invalidate dashboard cache
+    dashboardCache.invalidatePattern("dashboard-stats");
+
+    res.json(updatedDonation);
+  } catch (error: any) {
+    console.error("Update donation error:", error);
+
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        message: "Invalid donation data",
+        errors: error.errors,
+      });
+    }
+
+    res.status(500).json({ message: "Failed to update donation" });
+  }
+});
 
   // Delete individual donation (protected admin route)
   app.delete("/api/donations/:id", requireAuth, async (req, res) => {
