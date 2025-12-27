@@ -91,26 +91,24 @@ export default function DonationForm({
     };
 
     if (isEditMode && initialData) {
-      const donationId =
-        (initialData as any)._id || (initialData as any).id;
+  const donationId =
+    (initialData as any)._id || (initialData as any).id;
 
-      const response = await fetch(`/api/donations/${donationId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
+  const response = await fetch(`/api/donations/${donationId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to update donation");
-      }
-
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to update donation");
+  }
       // ✅ SAFE: handle empty or non-JSON response
-      const text = await response.text();
-      return text ? JSON.parse(text) : payload;
+      return payload;
     }
 
     // CREATE MODE (no change needed)
