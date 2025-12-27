@@ -64,6 +64,7 @@ export default function DonationForm({
         amount: initialData.amount,
         paymentMode: initialData.paymentMode,
         inscription: initialData.inscription,
+        
         donationDate: initialData.donationDate
           ? new Date(initialData.donationDate).toISOString().split("T")[0]
           : "", // ✅ STRING ONLY
@@ -84,6 +85,10 @@ export default function DonationForm({
 
   const createDonationMutation = useMutation({
     mutationFn: async (data: any) => {
+      const payload = {
+    ...data,
+    donationDate: new Date(data.donationDate), // 🔥 FINAL SAFETY
+  };
       if (isEditMode && initialData) {
         // Update existing donation
         const donationId = (initialData as any)._id || (initialData as any).id;
@@ -93,7 +98,7 @@ export default function DonationForm({
             "Content-Type": "application/json",
           },
           credentials: "include",
-          body: JSON.stringify(data),
+          body: JSON.stringify(payload),
         });
         if (!response.ok) {
           throw new Error("Failed to update donation");
@@ -102,13 +107,12 @@ export default function DonationForm({
       } else {
         // Create new donation
         const response = await fetch("/api/donations", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(data),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload), // 👈 use payload
         });
+      
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -165,7 +169,7 @@ export default function DonationForm({
           amount: undefined,
           paymentMode: "cash",
           inscription: false,
-          donationDate: undefined,
+          donationDate: "",
         });
         setDonorHistory(null);
 
@@ -339,7 +343,7 @@ const onSubmit = (data: DonationFormValues) => {
 const donationData: InsertDonation = {
   ...data,
   amount: Number(data.amount),
-  donationDate: new Date(data.donationDate), // ✅ ALWAYS Date
+  donationDate: new Date(data.donationDate),
 };
     createDonationMutation.mutate(donationData);
   };
@@ -718,6 +722,7 @@ const donationData: InsertDonation = {
                     e.preventDefault();
                     return false;
                   }
+                  
                   form.reset({
                     receiptNo: "",
                     name: "",
